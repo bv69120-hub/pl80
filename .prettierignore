@@ -1,0 +1,7 @@
+dist
+build
+node_modules
+.turbo
+packages/database/generated
+*.db
+*.sqlite

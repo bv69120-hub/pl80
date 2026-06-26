@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique
+  passwordHash String
+  role         String     @default("EMPLOYE")
+  createdAt    DateTime   @default(now())
+  printJobs    PrintJob[]
+}
+
+model PrintJob {
+  id        String   @id @default(cuid())
+  filename  String
+  status    String
+  copies    Int      @default(1)
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

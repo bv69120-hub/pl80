@@ -1,0 +1,47 @@
+{
+  "name": "bv-expedition-pro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Monorepo professionnel pour BV Expédition Pro.",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky",
+    "db:generate": "pnpm --filter @bv/database db:generate",
+    "db:migrate": "pnpm --filter @bv/database db:migrate",
+    "db:seed": "pnpm --filter @bv/database db:seed"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md,css,scss,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0"
+  }
+}

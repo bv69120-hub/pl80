@@ -1,0 +1,16 @@
+node_modules
+.turbo
+dist
+build
+.vite
+coverage
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+packages/database/generated

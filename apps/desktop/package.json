@@ -1,0 +1,26 @@
+{
+  "name": "@bv/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build && tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -b --pretty && tsc -p tsconfig.electron.json --pretty --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@bv/shared": "workspace:*",
+    "@bv/ui": "workspace:*",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "vite": "^6.0.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5"
+  }
+}
