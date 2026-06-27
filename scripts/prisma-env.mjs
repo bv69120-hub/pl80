@@ -1,8 +1,9 @@
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-function loadEnvFile(filePath: string) {
+function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
     return;
   }
@@ -24,10 +25,7 @@ function loadEnvFile(filePath: string) {
     const key = trimmed.slice(0, separatorIndex).trim();
     let value = trimmed.slice(separatorIndex + 1).trim();
 
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
 
@@ -37,22 +35,30 @@ function loadEnvFile(filePath: string) {
   }
 }
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
 const databasePackageRoot = path.join(repoRoot, "packages/database");
 const envPath = path.join(repoRoot, ".env");
 
 loadEnvFile(envPath);
-process.chdir(databasePackageRoot);
 
-const { createApp } = await import("./app.js");
+const databaseUrl = process.env.DATABASE_URL ?? "file:./dev.db";
+process.env.DATABASE_URL = databaseUrl;
 
-const port = Number(process.env.PORT ?? 3333);
-const host = process.env.HOST ?? "127.0.0.1";
-
-console.log(`[api] Database URL loaded: ${process.env.DATABASE_URL ? "oui" : "non"}`);
-
-const app = createApp();
-
-app.listen(port, host, () => {
-  console.log(`BV Expédition Pro API listening on http://${host}:${port}`);
+const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const result = spawnSync(pnpmCommand, ["exec", "prisma", ...process.argv.slice(2)], {
+  cwd: databasePackageRoot,
+  shell: process.platform === "win32",
+  stdio: "inherit",
+  env: {
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+  },
 });
+
+if (result.error) {
+  console.error(result.error);
+  process.exit(1);
+}
+
+process.exit(result.status ?? 1);

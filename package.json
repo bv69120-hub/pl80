@@ -19,7 +19,8 @@
     "prepare": "husky",
     "db:generate": "pnpm --filter @bv/database db:generate",
     "db:migrate": "pnpm --filter @bv/database db:migrate",
-    "db:seed": "pnpm --filter @bv/database db:seed"
+    "db:seed": "pnpm --filter @bv/database db:seed",
+    "db:setup": "pnpm --filter @bv/database db:migrate && pnpm --filter @bv/database db:seed"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,md,css,scss,yml,yaml}": [
