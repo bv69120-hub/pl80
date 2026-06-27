@@ -52,6 +52,9 @@ importers:
       "@bv/database":
         specifier: workspace:*
         version: link:../../packages/database
+      "@bv/printer":
+        specifier: workspace:*
+        version: link:../../packages/printer
       "@bv/shared":
         specifier: workspace:*
         version: link:../../packages/shared
