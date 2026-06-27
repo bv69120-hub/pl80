@@ -3,6 +3,7 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import { appConfig } from "@bv/shared";
 import { authRouter } from "./auth/auth.routes.js";
+import { printJobsRouter } from "./print-jobs/print.jobs.routes.js";
 
 export function createApp(): Express {
   const app = express();
@@ -12,6 +13,7 @@ export function createApp(): Express {
   app.use(express.json());
 
   app.use("/api/auth", authRouter);
+  app.use("/api/print-jobs", printJobsRouter);
 
   app.get("/health", (_request, response) => {
     response.json({

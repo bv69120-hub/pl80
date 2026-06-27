@@ -1,4 +1,5 @@
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
@@ -8,6 +9,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Divider,
   FormControl,
   Grid,
@@ -18,26 +20,105 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { ChangeEvent, DragEvent, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import "react-pdf/dist/esm/Page/TextLayer.css";
+import { useAuth } from "../auth/useAuth";
 
-const printers = [
-  { value: "pl80e", label: "PL80E - intégration prévue" },
-  { value: "office-placeholder", label: "Imprimante bureau - placeholder" },
-];
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
+
+const printers = [{ value: "PL80E", label: "PL80E" }];
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} octets`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} Ko`;
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
+}
 
 export function NewLabelPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [copies, setCopies] = useState(1);
-  const [printer, setPrinter] = useState("pl80e");
+  const [printer, setPrinter] = useState("PL80E");
   const [isDragging, setIsDragging] = useState(false);
+  const [pageCount, setPageCount] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { token } = useAuth();
+
+  const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setPageCount(null);
+      return;
+    }
+
+    setPageCount(null);
+  }, [selectedFile]);
+
+  async function uploadFile(file: File) {
+    if (!token) {
+      setUploadError("Vous devez être connecté pour envoyer un bordereau.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("copies", String(copies));
+      formData.append("printerName", printer);
+
+      const response = await fetch(`${apiBaseUrl}/api/print-jobs`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Échec de l'envoi du bordereau.");
+      }
+
+      setUploadSuccess("Bordereau envoyé au backend. Aucune impression n'a été lancée.");
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Échec de l'envoi du bordereau.");
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   function handleFiles(files: FileList | null) {
     const file = files?.item(0);
 
-    if (file) {
-      setSelectedFile(file);
+    if (!file) {
+      return;
     }
+
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setSelectedFile(null);
+      setUploadError("Veuillez sélectionner un fichier PDF valide.");
+      return;
+    }
+
+    setSelectedFile(file);
+    void uploadFile(file);
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -50,6 +131,16 @@ export function NewLabelPage() {
     handleFiles(event.dataTransfer.files);
   }
 
+  function handleRemoveFile() {
+    setSelectedFile(null);
+    setPageCount(null);
+    setUploadError(null);
+    setUploadSuccess(null);
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }
+
   return (
     <Stack spacing={3}>
       <Box>
@@ -60,8 +151,7 @@ export function NewLabelPage() {
       </Box>
 
       <Alert severity="info">
-        L'intégration PL80E est prévue pour une prochaine étape. Cette V1 ne déclenche aucune
-        impression.
+        L'envoi du PDF est branché sur l'API et ne lance pas encore d'impression physique.
       </Alert>
 
       <Grid container spacing={3}>
@@ -122,12 +212,32 @@ export function NewLabelPage() {
                       <Typography sx={{ fontWeight: 800 }} noWrap>
                         {selectedFile.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {(selectedFile.size / 1024).toFixed(1)} Ko
-                      </Typography>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Chip label={formatFileSize(selectedFile.size)} size="small" />
+                        <Chip
+                          label={
+                            pageCount
+                              ? `${pageCount} page${pageCount > 1 ? "s" : ""}`
+                              : "Analyse en cours..."
+                          }
+                          size="small"
+                        />
+                      </Stack>
                     </Box>
+                    <Button
+                      color="error"
+                      variant="outlined"
+                      startIcon={<DeleteOutlineOutlinedIcon />}
+                      onClick={handleRemoveFile}
+                    >
+                      Supprimer
+                    </Button>
                   </Stack>
                 )}
+
+                {uploadError && <Alert severity="error">{uploadError}</Alert>}
+                {uploadSuccess && <Alert severity="success">{uploadSuccess}</Alert>}
+                {isUploading && <Alert severity="info">Téléversement du PDF en cours...</Alert>}
               </Stack>
             </CardContent>
           </Card>
@@ -194,15 +304,37 @@ export function NewLabelPage() {
                       textAlign: "center",
                     }}
                   >
-                    <Stack spacing={1.5} alignItems="center">
-                      <PictureAsPdfOutlinedIcon color="secondary" sx={{ fontSize: 56 }} />
-                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        Aperçu indisponible
-                      </Typography>
-                      <Typography color="text.secondary">
-                        Le rendu PDF sera branché dans une prochaine itération.
-                      </Typography>
-                    </Stack>
+                    {selectedFile ? (
+                      <Box sx={{ width: "100%", maxHeight: 560, overflow: "auto" }}>
+                        <Document
+                          file={selectedFile}
+                          onLoadSuccess={({ numPages }) => setPageCount(numPages)}
+                          onLoadError={() => setPageCount(null)}
+                        >
+                          {pageCount
+                            ? Array.from({ length: pageCount }, (_, index) => (
+                                <Box key={index + 1} sx={{ mb: 2 }}>
+                                  <Page
+                                    pageNumber={index + 1}
+                                    renderTextLayer={false}
+                                    renderAnnotationLayer={false}
+                                  />
+                                </Box>
+                              ))
+                            : null}
+                        </Document>
+                      </Box>
+                    ) : (
+                      <Stack spacing={1.5} alignItems="center">
+                        <PictureAsPdfOutlinedIcon color="secondary" sx={{ fontSize: 56 }} />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                          Aperçu indisponible
+                        </Typography>
+                        <Typography color="text.secondary">
+                          Sélectionnez un PDF pour l’afficher ici.
+                        </Typography>
+                      </Stack>
+                    )}
                   </Box>
                 </Stack>
               </CardContent>
