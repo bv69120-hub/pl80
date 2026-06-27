@@ -3,6 +3,7 @@ import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutl
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -14,13 +15,20 @@ import {
   MenuItem,
   Select,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import { ChangeEvent, DragEvent, useRef, useState } from "react";
 
+const printers = [
+  { value: "pl80e", label: "PL80E - intégration prévue" },
+  { value: "office-placeholder", label: "Imprimante bureau - placeholder" },
+];
+
 export function NewLabelPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [copies, setCopies] = useState(1);
+  const [printer, setPrinter] = useState("pl80e");
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -47,9 +55,14 @@ export function NewLabelPage() {
       <Box>
         <Typography variant="h4">Nouveau bordereau</Typography>
         <Typography color="text.secondary">
-          Préparez un fichier PDF et choisissez le nombre de copies à imprimer.
+          Préparez un PDF, choisissez l'imprimante cible et le nombre de copies.
         </Typography>
       </Box>
+
+      <Alert severity="info">
+        L'intégration PL80E est prévue pour une prochaine étape. Cette V1 ne déclenche aucune
+        impression.
+      </Alert>
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={7}>
@@ -126,17 +139,27 @@ export function NewLabelPage() {
               <CardContent>
                 <Stack spacing={2.5}>
                   <Typography variant="h6">Paramètres d'impression</Typography>
+                  <TextField
+                    label="Nombre de copies"
+                    type="number"
+                    value={copies}
+                    onChange={(event) =>
+                      setCopies(Math.max(1, Math.min(99, Number(event.target.value) || 1)))
+                    }
+                    inputProps={{ min: 1, max: 99 }}
+                    fullWidth
+                  />
                   <FormControl fullWidth>
-                    <InputLabel id="copies-label">Nombre de copies</InputLabel>
+                    <InputLabel id="printer-label">Imprimante</InputLabel>
                     <Select
-                      labelId="copies-label"
-                      label="Nombre de copies"
-                      value={copies}
-                      onChange={(event) => setCopies(Number(event.target.value))}
+                      labelId="printer-label"
+                      label="Imprimante"
+                      value={printer}
+                      onChange={(event) => setPrinter(event.target.value)}
                     >
-                      {[1, 2, 3, 4, 5].map((copyCount) => (
-                        <MenuItem key={copyCount} value={copyCount}>
-                          {copyCount}
+                      {printers.map((printerOption) => (
+                        <MenuItem key={printerOption.value} value={printerOption.value}>
+                          {printerOption.label}
                         </MenuItem>
                       ))}
                     </Select>

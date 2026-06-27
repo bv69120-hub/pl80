@@ -1,23 +1,33 @@
-import AssignmentTurnedInOutlinedIcon from "@mui/icons-material/AssignmentTurnedInOutlined";
-import PrintDisabledOutlinedIcon from "@mui/icons-material/PrintDisabledOutlined";
+import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
+import LocalPrintshopOutlinedIcon from "@mui/icons-material/LocalPrintshopOutlined";
+import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
-import { Box, Card, CardContent, Grid, Stack, Typography } from "@mui/material";
+import { Box, Card, CardContent, Chip, Grid, Stack, Typography } from "@mui/material";
 
-const emptyMetrics = [
+const dashboardMetrics = [
   {
-    label: "Bordereaux du jour",
+    label: "Impressions du jour",
     value: "0",
-    icon: <AssignmentTurnedInOutlinedIcon color="primary" />,
+    helper: "Aucune impression lancée",
+    icon: <PrintOutlinedIcon color="primary" />,
   },
   {
     label: "Impressions en attente",
     value: "0",
+    helper: "File d'attente vide",
     icon: <ScheduleOutlinedIcon color="primary" />,
   },
   {
-    label: "Erreurs d'impression",
-    value: "0",
-    icon: <PrintDisabledOutlinedIcon color="secondary" />,
+    label: "Imprimante",
+    value: "PL80E",
+    helper: "Intégration prévue",
+    icon: <LocalPrintshopOutlinedIcon color="primary" />,
+  },
+  {
+    label: "Utilisateurs connectés",
+    value: "1",
+    helper: "Session opérateur active",
+    icon: <GroupOutlinedIcon color="primary" />,
   },
 ];
 
@@ -27,16 +37,16 @@ export function DashboardPage() {
       <Box>
         <Typography variant="h4">Tableau de bord</Typography>
         <Typography color="text.secondary">
-          Vue synthétique prête à recevoir les futurs indicateurs métier.
+          Vue synthétique des impressions et de la disponibilité imprimante.
         </Typography>
       </Box>
 
       <Grid container spacing={2.5}>
-        {emptyMetrics.map((metric) => (
-          <Grid item xs={12} md={4} key={metric.label}>
-            <Card>
+        {dashboardMetrics.map((metric) => (
+          <Grid item xs={12} sm={6} lg={3} key={metric.label}>
+            <Card sx={{ height: "100%" }}>
               <CardContent>
-                <Stack direction="row" spacing={2} alignItems="center">
+                <Stack spacing={2}>
                   <Box
                     sx={{
                       width: 48,
@@ -51,7 +61,10 @@ export function DashboardPage() {
                   </Box>
                   <Box>
                     <Typography variant="h5">{metric.value}</Typography>
-                    <Typography color="text.secondary">{metric.label}</Typography>
+                    <Typography sx={{ fontWeight: 800 }}>{metric.label}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {metric.helper}
+                    </Typography>
                   </Box>
                 </Stack>
               </CardContent>
@@ -61,13 +74,23 @@ export function DashboardPage() {
       </Grid>
 
       <Card>
-        <CardContent sx={{ minHeight: 220, display: "grid", placeItems: "center" }}>
-          <Box textAlign="center">
-            <Typography variant="h6">Aucune activité pour le moment</Typography>
-            <Typography color="text.secondary">
-              Les prochains bordereaux et impressions apparaîtront ici.
-            </Typography>
-          </Box>
+        <CardContent sx={{ minHeight: 220 }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={2.5}
+            alignItems={{ xs: "flex-start", md: "center" }}
+            justifyContent="space-between"
+            sx={{ height: "100%" }}
+          >
+            <Box>
+              <Typography variant="h6">File d'impression</Typography>
+              <Typography color="text.secondary" sx={{ maxWidth: 680 }}>
+                Aucun bordereau n'est en cours de traitement. La V1 prépare l'interface pour la
+                future intégration de la PL80E sans déclencher d'impression.
+              </Typography>
+            </Box>
+            <Chip label="Impression désactivée" color="secondary" variant="outlined" />
+          </Stack>
         </CardContent>
       </Card>
     </Stack>

@@ -173,11 +173,11 @@ export function AppLayout() {
               <MenuIcon />
             </IconButton>
           )}
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" sx={{ lineHeight: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h6" sx={{ lineHeight: 1 }} noWrap>
               Espace opérateur
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" noWrap>
               Gestion des bordereaux et impressions
             </Typography>
           </Box>
