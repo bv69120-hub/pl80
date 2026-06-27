@@ -105,6 +105,20 @@ pnpm --filter @bv/api start
 L'API expose une route technique `GET /health` et les routes
 d'authentification.
 
+## Impression Windows PL80E
+
+Le package printer supporte deux modes d'impression :
+
+```env
+PRINT_MODE=simulation
+PRINT_MODE=windows
+DEFAULT_PRINTER_NAME=PL80E
+```
+
+- `simulation` conserve le comportement actuel sans impression physique.
+- `windows` tente d'imprimer le PDF sur l'imprimante Windows `PL80E`.
+- `PRINT_COMMAND` peut être défini pour remplacer la commande Windows par défaut si besoin.
+
 ### Desktop
 
 ```powershell

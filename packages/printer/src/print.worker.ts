@@ -1,4 +1,5 @@
 import { printQueue } from "./print.queue.js";
+import { printerService } from "./printer.service.js";
 import type { PrintJob } from "./printer.types.js";
 
 function delay(ms: number) {
@@ -23,21 +24,34 @@ export class PrintWorker {
         continue;
       }
 
-      const updatedJob: PrintJob = {
+      const processingJob: PrintJob = {
         ...job,
         status: "PRINTING",
       };
 
-      void updatedJob;
+      void processingJob;
 
-      await delay(2000);
+      const result = await printerService.printPdf({
+        filePath: job.filePath,
+        printerName: job.printerName,
+        copies: job.copies,
+      });
 
-      const completedJob: PrintJob = {
-        ...job,
-        status: "PRINTED",
-      };
+      if (result.success) {
+        const completedJob: PrintJob = {
+          ...job,
+          status: "PRINTED",
+        };
 
-      void completedJob;
+        void completedJob;
+      } else {
+        const failedJob: PrintJob = {
+          ...job,
+          status: "FAILED",
+        };
+
+        void failedJob;
+      }
     }
   }
 
