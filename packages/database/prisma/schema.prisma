@@ -20,10 +20,13 @@ model PrintJob {
   id        String   @id @default(cuid())
   filename  String
   status    String
+  source    String   @default("EMPLOYEE")
+  printerName String @default("PL80E")
   copies    Int      @default(1)
   createdAt DateTime @default(now())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([source, status])
 }

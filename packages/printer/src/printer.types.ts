@@ -9,6 +9,8 @@ export interface PrintJob {
   copies: number;
   status: PrintJobStatus;
   createdAt: string;
+  source?: "CLIENT" | "EMPLOYEE";
+  onStatusChange?: (status: PrintJobStatus) => void | Promise<void>;
 }
 
 export interface PrintQueueSummary {

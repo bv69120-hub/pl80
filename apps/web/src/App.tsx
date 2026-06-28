@@ -9,6 +9,7 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NewLabelPage } from "./pages/NewLabelPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ClientPrintPage } from "./pages/ClientPrintPage";
 
 export function App() {
   return (
@@ -16,6 +17,7 @@ export function App() {
       <CssBaseline />
       <AuthProvider>
         <Routes>
+          <Route path="/client-print" element={<ClientPrintPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>

@@ -96,7 +96,7 @@ export function NewLabelPage() {
         throw new Error("Échec de l'envoi du bordereau.");
       }
 
-      setUploadSuccess("Bordereau envoyé au backend. Aucune impression n'a été lancée.");
+      setUploadSuccess("Votre bordereau a été ajouté à la file d’impression.");
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Échec de l'envoi du bordereau.");
     } finally {

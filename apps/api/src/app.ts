@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { appConfig } from "@bv/shared";
 import { authRouter } from "./auth/auth.routes.js";
 import { printJobsRouter } from "./print-jobs/print.jobs.routes.js";
+import { clientPrintRouter } from "./print-jobs/client.print.routes.js";
 
 export function createApp(): Express {
   const app = express();
@@ -14,6 +15,7 @@ export function createApp(): Express {
 
   app.use("/api/auth", authRouter);
   app.use("/api/print-jobs", printJobsRouter);
+  app.use("/api/client-print", clientPrintRouter);
 
   app.get("/health", (_request, response) => {
     response.json({
@@ -31,6 +33,14 @@ export function createApp(): Express {
     ) => {
       void next;
       console.error(error);
+      if (error instanceof Error && error.message === "PDF_ONLY") {
+        response.status(400).json({ message: "Seuls les fichiers PDF sont acceptés." });
+        return;
+      }
+      if (error instanceof Error && error.name === "MulterError") {
+        response.status(400).json({ message: "Le PDF dépasse la taille maximale de 10 Mo." });
+        return;
+      }
       response.status(500).json({ message: "Internal server error" });
     },
   );

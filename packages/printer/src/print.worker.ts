@@ -28,8 +28,7 @@ export class PrintWorker {
         ...job,
         status: "PRINTING",
       };
-
-      void processingJob;
+      await job.onStatusChange?.(processingJob.status);
 
       const result = await printerService.printPdf({
         filePath: job.filePath,
@@ -43,14 +42,14 @@ export class PrintWorker {
           status: "PRINTED",
         };
 
-        void completedJob;
+        await job.onStatusChange?.(completedJob.status);
       } else {
         const failedJob: PrintJob = {
           ...job,
           status: "FAILED",
         };
 
-        void failedJob;
+        await job.onStatusChange?.(failedJob.status);
       }
     }
   }
