@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "@bv/database";
 import { enqueuePrintJob, upload } from "./print.jobs.routes.js";
+import { isClientTokenValid } from "../settings/client.mode.service.js";
 
 const CLIENT_DELAY_MS = 10_000;
 let lastClientPrintAt = 0;
@@ -8,24 +9,41 @@ let requestInProgress = false;
 
 export const clientPrintRouter: Router = Router();
 
-clientPrintRouter.post("/", upload.single("file"), async (request, response, next) => {
+function routeToken(value: string | string[]) {
+  return Array.isArray(value) ? (value[0] ?? "") : value;
+}
+
+clientPrintRouter.get("/:token/status", async (request, response, next) => {
+  try {
+    const available = await isClientTokenValid(routeToken(request.params.token));
+    response.status(available ? 200 : 403).json({ available });
+  } catch (error) {
+    next(error);
+  }
+});
+
+clientPrintRouter.post("/:token", upload.single("file"), async (request, response, next) => {
   if (requestInProgress) {
     response.status(409).json({ message: "Une demande client est déjà en cours." });
     return;
   }
   requestInProgress = true;
   try {
+    if (!(await isClientTokenValid(routeToken(request.params.token)))) {
+      response
+        .status(403)
+        .json({ message: "Le service d'impression client est momentanément indisponible." });
+      return;
+    }
     if (!request.file) {
       response.status(400).json({ message: "Un fichier PDF est requis." });
       return;
     }
     const elapsed = Date.now() - lastClientPrintAt;
     if (elapsed < CLIENT_DELAY_MS) {
-      response
-        .status(429)
-        .json({
-          message: `Veuillez patienter ${Math.ceil((CLIENT_DELAY_MS - elapsed) / 1000)} seconde(s).`,
-        });
+      response.status(429).json({
+        message: `Veuillez patienter ${Math.ceil((CLIENT_DELAY_MS - elapsed) / 1000)} seconde(s).`,
+      });
       return;
     }
     const activeJob = await prisma.printJob.findFirst({

@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
+import { useParams } from "react-router-dom";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 
@@ -25,14 +26,28 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 export function ClientPrintPage() {
+  const { token } = useParams<{ token: string }>();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<"loading" | "available" | "unavailable">(
+    "loading",
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
+
+  useEffect(() => {
+    if (!token) {
+      setAvailability("unavailable");
+      return;
+    }
+    fetch(`${apiBaseUrl}/api/client-print/${encodeURIComponent(token)}/status`)
+      .then((response) => setAvailability(response.ok ? "available" : "unavailable"))
+      .catch(() => setAvailability("unavailable"));
+  }, [apiBaseUrl, token]);
 
   useEffect(() => {
     if (!file) {
@@ -70,7 +85,10 @@ export function ClientPrintPage() {
     try {
       const body = new FormData();
       body.append("file", file);
-      const response = await fetch(`${apiBaseUrl}/api/client-print`, { method: "POST", body });
+      const response = await fetch(
+        `${apiBaseUrl}/api/client-print/${encodeURIComponent(token ?? "")}`,
+        { method: "POST", body },
+      );
       const result = (await response.json()) as { message?: string };
       if (!response.ok) throw new Error(result.message ?? "Impossible de lancer l’impression.");
       setIsComplete(true);
@@ -82,6 +100,42 @@ export function ClientPrintPage() {
       setIsPrinting(false);
     }
   }
+
+  if (availability === "loading")
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          bgcolor: "background.default",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+
+  if (availability === "unavailable")
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          bgcolor: "background.default",
+          p: 2,
+        }}
+      >
+        <Card sx={{ maxWidth: 600 }}>
+          <CardContent sx={{ p: { xs: 4, sm: 6 }, textAlign: "center" }}>
+            <PrintRoundedIcon color="disabled" sx={{ fontSize: 72 }} />
+            <Typography variant="h5" sx={{ mt: 2 }}>
+              Le service d'impression client est momentanément indisponible.
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
+    );
 
   if (isComplete)
     return (

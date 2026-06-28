@@ -18,6 +18,7 @@ export function App() {
       <AuthProvider>
         <Routes>
           <Route path="/client-print" element={<ClientPrintPage />} />
+          <Route path="/client-print/:token" element={<ClientPrintPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
