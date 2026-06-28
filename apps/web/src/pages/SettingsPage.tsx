@@ -16,6 +16,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "../auth/useAuth";
+import { apiUrl } from "../api/apiUrl";
 
 interface ClientMode {
   enabled: boolean;
@@ -29,10 +30,9 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
-  const clientUrl = mode
-    ? `http://${window.location.hostname}:5173/client-print/${mode.token}`
-    : "";
+  const configuredClientBaseUrl = import.meta.env.VITE_PUBLIC_CLIENT_BASE_URL?.trim();
+  const clientBaseUrl = (configuredClientBaseUrl || window.location.origin).replace(/\/+$/, "");
+  const clientUrl = mode ? `${clientBaseUrl}/client-print/${mode.token}` : "";
 
   const request = useCallback(
     async (path = "", method = "GET") => {
@@ -40,7 +40,7 @@ export function SettingsPage() {
       setBusy(true);
       setError(null);
       try {
-        const response = await fetch(`${apiBaseUrl}/api/settings/client-mode${path}`, {
+        const response = await fetch(apiUrl(`/api/settings/client-mode${path}`), {
           method,
           headers: { Authorization: `Bearer ${authToken}` },
         });
@@ -52,7 +52,7 @@ export function SettingsPage() {
         setBusy(false);
       }
     },
-    [apiBaseUrl, authToken],
+    [authToken],
   );
 
   useEffect(() => {
@@ -161,6 +161,14 @@ export function SettingsPage() {
                         Copier
                       </Button>
                     </Stack>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                      sx={{ mt: 1 }}
+                    >
+                      Cette adresse doit être accessible depuis le téléphone du client.
+                    </Typography>
                     <Button
                       variant="outlined"
                       startIcon={<PrintRoundedIcon />}

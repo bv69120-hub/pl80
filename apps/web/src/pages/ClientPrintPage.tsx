@@ -16,6 +16,7 @@ import {
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useParams } from "react-router-dom";
+import { apiUrl } from "../api/apiUrl";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 
@@ -33,21 +34,23 @@ export function ClientPrintPage() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [availability, setAvailability] = useState<"loading" | "available" | "unavailable">(
-    "loading",
-  );
+  const [availability, setAvailability] = useState<
+    "loading" | "available" | "disabled" | "invalid" | "unreachable"
+  >("loading");
   const inputRef = useRef<HTMLInputElement>(null);
-  const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
-
   useEffect(() => {
     if (!token) {
-      setAvailability("unavailable");
+      setAvailability("invalid");
       return;
     }
-    fetch(`${apiBaseUrl}/api/client-print/${encodeURIComponent(token)}/status`)
-      .then((response) => setAvailability(response.ok ? "available" : "unavailable"))
-      .catch(() => setAvailability("unavailable"));
-  }, [apiBaseUrl, token]);
+    fetch(apiUrl(`/api/client-print/${encodeURIComponent(token)}/status`))
+      .then(async (response) => {
+        const result = (await response.json()) as { reason?: string };
+        if (response.ok) setAvailability("available");
+        else setAvailability(result.reason === "DISABLED" ? "disabled" : "invalid");
+      })
+      .catch(() => setAvailability("unreachable"));
+  }, [token]);
 
   useEffect(() => {
     if (!file) {
@@ -85,10 +88,10 @@ export function ClientPrintPage() {
     try {
       const body = new FormData();
       body.append("file", file);
-      const response = await fetch(
-        `${apiBaseUrl}/api/client-print/${encodeURIComponent(token ?? "")}`,
-        { method: "POST", body },
-      );
+      const response = await fetch(apiUrl(`/api/client-print/${encodeURIComponent(token ?? "")}`), {
+        method: "POST",
+        body,
+      });
       const result = (await response.json()) as { message?: string };
       if (!response.ok) throw new Error(result.message ?? "Impossible de lancer l’impression.");
       setIsComplete(true);
@@ -115,7 +118,13 @@ export function ClientPrintPage() {
       </Box>
     );
 
-  if (availability === "unavailable")
+  if (availability !== "available") {
+    const unavailableMessage =
+      availability === "disabled"
+        ? "Le mode client est actuellement désactivé."
+        : availability === "unreachable"
+          ? "L’API d’impression est inaccessible. Vérifiez la connexion au réseau local."
+          : "Ce QR Code est expiré ou invalide.";
     return (
       <Box
         sx={{
@@ -130,12 +139,13 @@ export function ClientPrintPage() {
           <CardContent sx={{ p: { xs: 4, sm: 6 }, textAlign: "center" }}>
             <PrintRoundedIcon color="disabled" sx={{ fontSize: 72 }} />
             <Typography variant="h5" sx={{ mt: 2 }}>
-              Le service d'impression client est momentanément indisponible.
+              {unavailableMessage}
             </Typography>
           </CardContent>
         </Card>
       </Box>
     );
+  }
 
   if (isComplete)
     return (

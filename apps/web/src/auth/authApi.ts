@@ -1,10 +1,7 @@
 import type { AuthenticatedUser, LoginResponse } from "./auth.types";
+import { apiUrl } from "../api/apiUrl";
 
 const tokenStorageKey = "bv-expedition-pro-token";
-
-function getApiBaseUrl() {
-  return import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
-}
 
 export function getStoredToken() {
   return window.localStorage.getItem(tokenStorageKey);
@@ -19,7 +16,7 @@ export function clearStoredToken() {
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/auth/login`, {
+  const response = await fetch(apiUrl("/api/auth/login"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -35,7 +32,7 @@ export async function login(username: string, password: string): Promise<LoginRe
 }
 
 export async function fetchCurrentUser(token: string): Promise<AuthenticatedUser> {
-  const response = await fetch(`${getApiBaseUrl()}/api/auth/me`, {
+  const response = await fetch(apiUrl("/api/auth/me"), {
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/useAuth";
+import { apiUrl } from "../api/apiUrl";
 
 interface HistoryJob {
   id: string;
@@ -35,8 +36,7 @@ export function HistoryPage() {
   const [error, setError] = useState(false);
   useEffect(() => {
     if (!token) return;
-    const api = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
-    fetch(`${api}/api/print-jobs`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(apiUrl("/api/print-jobs"), { headers: { Authorization: `Bearer ${token}` } })
       .then((response) => {
         if (!response.ok) throw new Error();
         return response.json() as Promise<{ jobs: HistoryJob[] }>;

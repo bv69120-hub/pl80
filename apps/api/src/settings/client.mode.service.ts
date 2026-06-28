@@ -49,9 +49,14 @@ export async function regenerateClientToken() {
   return getClientMode();
 }
 
-export async function isClientTokenValid(candidate: string) {
+export type ClientTokenStatus = "AVAILABLE" | "DISABLED" | "EXPIRED" | "INVALID_TOKEN";
+
+export async function getClientTokenStatus(candidate: string): Promise<ClientTokenStatus> {
   const mode = await getClientMode();
-  if (!mode.enabled || !candidate || candidate.length !== mode.token.length) return false;
-  if (mode.expiresAt && new Date(mode.expiresAt).getTime() <= Date.now()) return false;
-  return timingSafeEqual(Buffer.from(candidate), Buffer.from(mode.token));
+  if (!mode.enabled) return "DISABLED";
+  if (mode.expiresAt && new Date(mode.expiresAt).getTime() <= Date.now()) return "EXPIRED";
+  if (!candidate || candidate.length !== mode.token.length) return "INVALID_TOKEN";
+  return timingSafeEqual(Buffer.from(candidate), Buffer.from(mode.token))
+    ? "AVAILABLE"
+    : "INVALID_TOKEN";
 }

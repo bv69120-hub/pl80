@@ -25,6 +25,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import { useAuth } from "../auth/useAuth";
+import { apiUrl } from "../api/apiUrl";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -57,8 +58,6 @@ export function NewLabelPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { token } = useAuth();
 
-  const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:3333";
-
   useEffect(() => {
     if (!selectedFile) {
       setPageCount(null);
@@ -84,7 +83,7 @@ export function NewLabelPage() {
       formData.append("copies", String(copies));
       formData.append("printerName", printer);
 
-      const response = await fetch(`${apiBaseUrl}/api/print-jobs`, {
+      const response = await fetch(apiUrl("/api/print-jobs"), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

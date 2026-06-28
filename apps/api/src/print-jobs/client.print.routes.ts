@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "@bv/database";
 import { enqueuePrintJob, upload } from "./print.jobs.routes.js";
-import { isClientTokenValid } from "../settings/client.mode.service.js";
+import { getClientTokenStatus } from "../settings/client.mode.service.js";
 
 const CLIENT_DELAY_MS = 10_000;
 let lastClientPrintAt = 0;
@@ -15,8 +15,11 @@ function routeToken(value: string | string[]) {
 
 clientPrintRouter.get("/:token/status", async (request, response, next) => {
   try {
-    const available = await isClientTokenValid(routeToken(request.params.token));
-    response.status(available ? 200 : 403).json({ available });
+    const status = await getClientTokenStatus(routeToken(request.params.token));
+    response.status(status === "AVAILABLE" ? 200 : 403).json({
+      available: status === "AVAILABLE",
+      reason: status,
+    });
   } catch (error) {
     next(error);
   }
@@ -29,10 +32,13 @@ clientPrintRouter.post("/:token", upload.single("file"), async (request, respons
   }
   requestInProgress = true;
   try {
-    if (!(await isClientTokenValid(routeToken(request.params.token)))) {
-      response
-        .status(403)
-        .json({ message: "Le service d'impression client est momentanément indisponible." });
+    const tokenStatus = await getClientTokenStatus(routeToken(request.params.token));
+    if (tokenStatus !== "AVAILABLE") {
+      const message =
+        tokenStatus === "DISABLED"
+          ? "Le mode client est désactivé."
+          : "Ce QR Code est expiré ou invalide.";
+      response.status(403).json({ message, reason: tokenStatus });
       return;
     }
     if (!request.file) {
