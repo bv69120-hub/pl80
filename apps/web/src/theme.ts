@@ -1,62 +1,54 @@
-import { createTheme } from "@mui/material/styles";
+import { alpha, createTheme } from "@mui/material/styles";
+
+const colors = {
+  blue: "#003B7A",
+  darkBlue: "#002B5C",
+  yellow: "#FFD400",
+  green: "#008C3A",
+  red: "#E30613",
+  pale: "#F5F8FC",
+};
 
 export const appTheme = createTheme({
   palette: {
     mode: "light",
     primary: {
-      main: "#174ea6",
-      dark: "#0d2f6f",
-      light: "#e8f0fe",
-      contrastText: "#ffffff",
+      main: colors.blue,
+      dark: colors.darkBlue,
+      light: "#E7F0FA",
+      contrastText: "#FFFFFF",
     },
-    secondary: {
-      main: "#d93025",
-      dark: "#9f1c16",
-      light: "#fce8e6",
-      contrastText: "#ffffff",
-    },
-    background: {
-      default: "#f6f8fc",
-      paper: "#ffffff",
-    },
-    text: {
-      primary: "#172033",
-      secondary: "#5f6f89",
-    },
+    secondary: { main: colors.yellow, dark: "#E1BA00", contrastText: colors.darkBlue },
+    success: { main: colors.green },
+    error: { main: colors.red },
+    background: { default: colors.pale, paper: "#FFFFFF" },
+    text: { primary: "#14263A", secondary: "#60758C" },
+    divider: "#DCE6F1",
   },
-  shape: {
-    borderRadius: 8,
-  },
+  shape: { borderRadius: 12 },
   typography: {
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    h4: {
-      fontWeight: 800,
-    },
-    h5: {
-      fontWeight: 800,
-    },
-    h6: {
-      fontWeight: 800,
-    },
-    button: {
-      fontWeight: 700,
-      textTransform: "none",
-    },
+    h4: { fontWeight: 800, letterSpacing: "-0.03em" },
+    h5: { fontWeight: 800, letterSpacing: "-0.02em" },
+    h6: { fontWeight: 800 },
+    button: { fontWeight: 800, textTransform: "none" },
   },
   components: {
+    MuiCssBaseline: { styleOverrides: { body: { backgroundColor: colors.pale } } },
     MuiButton: {
-      defaultProps: {
-        disableElevation: true,
-      },
+      defaultProps: { disableElevation: true },
+      styleOverrides: { root: { borderRadius: 9, minHeight: 42, paddingInline: 20 } },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          border: "1px solid #d9e2f2",
-          boxShadow: "0 10px 28px rgba(23, 32, 51, 0.08)",
+          border: "1px solid #DCE6F1",
+          boxShadow: `0 12px 32px ${alpha(colors.darkBlue, 0.07)}`,
         },
       },
     },
+    MuiChip: { styleOverrides: { root: { fontWeight: 700 } } },
+    MuiTextField: { defaultProps: { variant: "outlined" } },
   },
 });

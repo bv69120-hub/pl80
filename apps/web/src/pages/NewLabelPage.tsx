@@ -118,7 +118,8 @@ export function NewLabelPage() {
     }
 
     setSelectedFile(file);
-    void uploadFile(file);
+    setUploadError(null);
+    setUploadSuccess(null);
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -144,15 +145,13 @@ export function NewLabelPage() {
   return (
     <Stack spacing={3}>
       <Box>
-        <Typography variant="h4">Nouveau bordereau</Typography>
+        <Typography variant="h4" color="primary.dark">
+          Nouveau bordereau
+        </Typography>
         <Typography color="text.secondary">
           Préparez un PDF, choisissez l'imprimante cible et le nombre de copies.
         </Typography>
       </Box>
-
-      <Alert severity="info">
-        L'envoi du PDF est branché sur l'API et ne lance pas encore d'impression physique.
-      </Alert>
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={7}>
@@ -167,11 +166,11 @@ export function NewLabelPage() {
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={handleDrop}
                   sx={{
-                    minHeight: 280,
-                    border: "2px dashed",
-                    borderColor: isDragging ? "primary.main" : "divider",
+                    minHeight: 330,
+                    border: "3px dashed",
+                    borderColor: isDragging ? "primary.main" : "secondary.dark",
                     borderRadius: 2,
-                    bgcolor: isDragging ? "primary.light" : "#fbfcff",
+                    bgcolor: isDragging ? "primary.light" : "#FFFBE7",
                     display: "grid",
                     placeItems: "center",
                     p: 3,
@@ -180,7 +179,19 @@ export function NewLabelPage() {
                   }}
                 >
                   <Stack spacing={2} alignItems="center">
-                    <CloudUploadOutlinedIcon color="primary" sx={{ fontSize: 64 }} />
+                    <Box
+                      sx={{
+                        width: 82,
+                        height: 82,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        bgcolor: "secondary.main",
+                        color: "primary.dark",
+                      }}
+                    >
+                      <CloudUploadOutlinedIcon sx={{ fontSize: 44 }} />
+                    </Box>
                     <Box>
                       <Typography variant="h6">Glisser-déposer un bordereau PDF</Typography>
                       <Typography color="text.secondary">
@@ -194,7 +205,7 @@ export function NewLabelPage() {
                       hidden
                       onChange={handleInputChange}
                     />
-                    <Button variant="outlined" onClick={() => inputRef.current?.click()}>
+                    <Button variant="contained" onClick={() => inputRef.current?.click()}>
                       Parcourir
                     </Button>
                   </Stack>
@@ -274,13 +285,32 @@ export function NewLabelPage() {
                       ))}
                     </Select>
                   </FormControl>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{ p: 1.5, borderRadius: 2, bgcolor: "#EAF7EF" }}
+                  >
+                    <Box
+                      sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: "success.main" }}
+                    />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Imprimante sélectionnée
+                      </Typography>
+                      <Typography fontWeight={800}>PL80E · Prête</Typography>
+                    </Box>
+                  </Stack>
                   <Button
                     variant="contained"
+                    color="secondary"
                     size="large"
                     startIcon={<PrintOutlinedIcon />}
-                    disabled
+                    disabled={!selectedFile || isUploading}
+                    onClick={() => selectedFile && void uploadFile(selectedFile)}
+                    sx={{ minHeight: 58, fontSize: 17 }}
                   >
-                    Imprimer
+                    {isUploading ? "ENVOI EN COURS…" : "IMPRIMER"}
                   </Button>
                 </Stack>
               </CardContent>
@@ -295,7 +325,7 @@ export function NewLabelPage() {
                     sx={{
                       minHeight: 360,
                       borderRadius: 1,
-                      bgcolor: "#eef2f8",
+                      bgcolor: "#E8EEF5",
                       border: "1px solid",
                       borderColor: "divider",
                       display: "grid",
