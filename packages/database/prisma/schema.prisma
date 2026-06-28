@@ -17,15 +17,22 @@ model User {
 }
 
 model PrintJob {
-  id        String   @id @default(cuid())
-  filename  String
-  status    String
-  source    String   @default("EMPLOYEE")
-  printerName String @default("PL80E")
-  copies    Int      @default(1)
-  createdAt DateTime @default(now())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id                String   @id @default(cuid())
+  filename          String
+  status            String
+  source            String   @default("EMPLOYEE")
+  printerName       String   @default("PL80E")
+  copies            Int      @default(1)
+  originalFilePath  String?
+  preparedFilePath  String?
+  detectedCarrier   String?
+  detectedFormat    String?
+  adaptation        String?
+  adapted           Boolean  @default(false)
+  pl80eCompatible   Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([source, status])

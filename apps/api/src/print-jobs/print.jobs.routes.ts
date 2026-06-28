@@ -1,10 +1,12 @@
 import os from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { copyFile, mkdir } from "node:fs/promises";
 import { Router } from "express";
 import multer from "multer";
 import { prisma } from "@bv/database";
-import { printQueue } from "@bv/printer";
-import type { PrintJob, PrintJobStatus } from "@bv/printer";
+import { preparePdfForPrint, printQueue } from "@bv/printer";
+import type { PdfPreparationResult, PrintJob, PrintJobStatus } from "@bv/printer";
 import type { AuthenticatedRequest } from "../auth/auth.middleware.js";
 import { authenticate } from "../auth/auth.middleware.js";
 
@@ -20,6 +22,29 @@ const upload = multer({
 });
 
 export const printJobsRouter: Router = Router();
+
+const printHistoryDirectory =
+  process.env.PRINT_HISTORY_DIR ?? path.resolve(process.cwd(), "data", "print-history");
+
+export async function prepareUploadedPdf(file: Express.Multer.File) {
+  const preparation = await preparePdfForPrint(file.path);
+  await mkdir(printHistoryDirectory, { recursive: true });
+  const originalFilePath = path.join(printHistoryDirectory, `${randomUUID()}.pdf`);
+  await copyFile(file.path, originalFilePath);
+  return { preparation, originalFilePath };
+}
+
+export function preparationData(preparation: PdfPreparationResult, originalFilePath: string) {
+  return {
+    originalFilePath,
+    preparedFilePath: preparation.preparedPath,
+    detectedCarrier: preparation.carrier,
+    detectedFormat: preparation.format,
+    adaptation: preparation.adaptation,
+    adapted: preparation.adapted,
+    pl80eCompatible: preparation.compatiblePL80E,
+  };
+}
 
 function enqueuePrintJob(job: {
   id: string;
@@ -51,6 +76,7 @@ printJobsRouter.post("/", authenticate, upload.single("file"), async (request, r
       return;
     }
     const copies = Math.max(1, Math.min(99, Number(request.body.copies) || 1));
+    const { preparation, originalFilePath } = await prepareUploadedPdf(request.file);
     const job = await prisma.printJob.create({
       data: {
         filename: request.file.originalname,
@@ -59,16 +85,46 @@ printJobsRouter.post("/", authenticate, upload.single("file"), async (request, r
         printerName: "PL80E",
         copies,
         userId: auth.id,
+        ...preparationData(preparation, originalFilePath),
       },
     });
     enqueuePrintJob({
       id: job.id,
       filename: job.filename,
-      filePath: request.file.path,
+      filePath: preparation.preparedPath,
       source: "EMPLOYEE",
       copies,
     });
-    response.status(201).json(job);
+    response.status(201).json({ job, preparation });
+  } catch (error) {
+    next(error);
+  }
+});
+
+printJobsRouter.get("/:id/preparation", authenticate, async (request, response, next) => {
+  try {
+    const jobId = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id;
+    const job = await prisma.printJob.findUnique({
+      where: { id: jobId },
+      select: {
+        detectedCarrier: true,
+        detectedFormat: true,
+        adaptation: true,
+        adapted: true,
+        pl80eCompatible: true,
+      },
+    });
+    if (!job) {
+      response.status(404).json({ message: "Impression introuvable." });
+      return;
+    }
+    response.json({
+      carrier: job.detectedCarrier,
+      format: job.detectedFormat,
+      adaptation: job.adaptation,
+      adapted: job.adapted,
+      compatiblePL80E: job.pl80eCompatible,
+    });
   } catch (error) {
     next(error);
   }

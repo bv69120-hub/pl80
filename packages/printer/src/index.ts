@@ -11,6 +11,15 @@ export { PrintQueue, printQueue } from "./print.queue.js";
 export { PrintWorker, printWorker } from "./print.worker.js";
 export { PrinterService, printerService } from "./printer.service.js";
 export { printWithWindowsCommand } from "./printer.windows.js";
+export { carrierStrategies, detectCarrier } from "./preparation/carrier.strategies.js";
+export { detectPdfFormat, preparePdfForPrint } from "./preparation/pdf.preparation.js";
+export type {
+  AdaptationKind,
+  Carrier,
+  CarrierStrategy,
+  PdfFormat,
+  PdfPreparationResult,
+} from "./preparation/preparation.types.js";
 
 export const printerPackage = {
   name: "@bv/printer",

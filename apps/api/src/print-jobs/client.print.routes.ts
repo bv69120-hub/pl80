@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { prisma } from "@bv/database";
-import { enqueuePrintJob, upload } from "./print.jobs.routes.js";
+import {
+  enqueuePrintJob,
+  preparationData,
+  prepareUploadedPdf,
+  upload,
+} from "./print.jobs.routes.js";
 import { getClientTokenStatus } from "../settings/client.mode.service.js";
 
 const CLIENT_DELAY_MS = 10_000;
@@ -59,6 +64,7 @@ clientPrintRouter.post("/:token", upload.single("file"), async (request, respons
       response.status(409).json({ message: "Une impression client est déjà en cours." });
       return;
     }
+    const { preparation, originalFilePath } = await prepareUploadedPdf(request.file);
     const job = await prisma.printJob.create({
       data: {
         filename: request.file.originalname,
@@ -66,16 +72,22 @@ clientPrintRouter.post("/:token", upload.single("file"), async (request, respons
         source: "CLIENT",
         printerName: "PL80E",
         copies: 1,
+        ...preparationData(preparation, originalFilePath),
       },
     });
     lastClientPrintAt = Date.now();
     enqueuePrintJob({
       id: job.id,
       filename: job.filename,
-      filePath: request.file.path,
+      filePath: preparation.preparedPath,
       source: "CLIENT",
     });
-    response.status(201).json({ id: job.id, status: job.status, source: job.source });
+    response.status(201).json({
+      id: job.id,
+      status: job.status,
+      source: job.source,
+      preparation,
+    });
   } catch (error) {
     next(error);
   } finally {

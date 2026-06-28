@@ -18,17 +18,36 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useParams } from "react-router-dom";
 import { apiUrl } from "../api/apiUrl";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const CARRIERS = ["Vinted", "Chronopost", "Colissimo", "Mondial Relay", "UPS", "DHL", "GLS", "DPD"];
 const STEPS = ["Choisir le PDF", "Vérifier l’aperçu", "Imprimer"];
+
+function formatFileSize(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} Mo`;
+}
+
+function PreviewFallback({ file }: { file: File }) {
+  return (
+    <Stack alignItems="center" spacing={1} textAlign="center" sx={{ maxWidth: "100%", p: 2 }}>
+      <PictureAsPdfOutlinedIcon sx={{ fontSize: 58, color: "#003B7A" }} />
+      <Typography fontWeight={900} sx={{ maxWidth: "100%", overflowWrap: "anywhere" }}>
+        {file.name}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {formatFileSize(file.size)}
+      </Typography>
+      <Typography fontWeight={800} color="success.main">
+        PDF prêt à imprimer
+      </Typography>
+    </Stack>
+  );
+}
 
 function StepProgress({
   activeStep,
@@ -95,6 +114,7 @@ export function ClientPrintPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [isPreviewReady, setIsPreviewReady] = useState(false);
+  const [hasPreviewFailed, setHasPreviewFailed] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +153,7 @@ export function ClientPrintPage() {
     setIsComplete(false);
     setPageCount(0);
     setIsPreviewReady(false);
+    setHasPreviewFailed(false);
     if (!selected) return;
     if (selected.type !== "application/pdf" && !selected.name.toLowerCase().endsWith(".pdf")) {
       setFile(null);
@@ -151,6 +172,7 @@ export function ClientPrintPage() {
     setFile(null);
     setPageCount(0);
     setIsPreviewReady(false);
+    setHasPreviewFailed(false);
     setError(null);
     setIsComplete(false);
     if (inputRef.current) inputRef.current.value = "";
@@ -261,7 +283,7 @@ export function ClientPrintPage() {
     );
   }
 
-  const activeStep = !file ? 0 : isPreviewReady ? 2 : 1;
+  const activeStep = !file ? 0 : isPreviewReady || hasPreviewFailed ? 2 : 1;
 
   return (
     <Box
@@ -385,8 +407,9 @@ export function ClientPrintPage() {
                   <Document
                     file={previewUrl}
                     onLoadSuccess={({ numPages }) => setPageCount(numPages)}
+                    onLoadError={() => setHasPreviewFailed(true)}
                     loading={<CircularProgress />}
-                    error={<Typography color="error">Aperçu indisponible.</Typography>}
+                    error={file ? <PreviewFallback file={file} /> : null}
                   >
                     {pageCount > 0 && (
                       <Page
@@ -394,6 +417,8 @@ export function ClientPrintPage() {
                         renderTextLayer={false}
                         renderAnnotationLayer={false}
                         onRenderSuccess={() => setIsPreviewReady(true)}
+                        onRenderError={() => setHasPreviewFailed(true)}
+                        error={file ? <PreviewFallback file={file} /> : null}
                       />
                     )}
                   </Document>
@@ -404,6 +429,16 @@ export function ClientPrintPage() {
                   </Stack>
                 )}
               </Box>
+              {file && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  textAlign="center"
+                  sx={{ mt: 1.5 }}
+                >
+                  Votre fichier est prêt. L’aperçu peut ne pas s’afficher sur certains téléphones.
+                </Typography>
+              )}
             </CardContent>
           </Card>
 

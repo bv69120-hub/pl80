@@ -1,4 +1,5 @@
 import cors from "cors";
+import path from "node:path";
 import express, { type Express } from "express";
 import helmet from "helmet";
 import { appConfig } from "@bv/shared";
@@ -48,4 +49,13 @@ export function createApp(): Express {
   );
 
   return app;
+}
+
+export function createFrontendApp(webRoot: string): Express {
+  const frontend = express();
+  frontend.use(express.static(webRoot));
+  frontend.get("*", (_request, response) => {
+    response.sendFile(path.join(webRoot, "index.html"));
+  });
+  return frontend;
 }

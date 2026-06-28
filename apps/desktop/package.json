@@ -7,20 +7,73 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build && tsc -p tsconfig.electron.json",
+    "package:win": "electron-builder --win nsis --x64",
     "typecheck": "tsc -b --pretty && tsc -p tsconfig.electron.json --pretty --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@bv/api": "workspace:^",
+    "@bv/database": "workspace:^",
+    "@bv/printer": "workspace:^",
     "@bv/shared": "workspace:*",
     "@bv/ui": "workspace:*",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
-    "vite": "^6.0.7",
+    "express": "^4.21.2",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.7"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5"
+    "@types/react-dom": "^18.3.5",
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^2.1.8"
+  },
+  "build": {
+    "appId": "fr.bureauvallee.expeditionpro",
+    "productName": "BV Expedition Pro",
+    "artifactName": "BV-Expedition-Pro-Setup.exe",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      },
+      {
+        "from": "build/database/bv-expedition.db",
+        "to": "database/bv-expedition.db"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "**/node_modules/.prisma/**/*",
+      "**/node_modules/@prisma/client/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BV Expedition Pro"
+    }
   }
 }

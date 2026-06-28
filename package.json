@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "package": "pnpm build && node scripts/prepare-windows-package.mjs && pnpm --filter @bv/desktop package:win",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
     "format": "prettier --write .",

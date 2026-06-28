@@ -1,6 +1,5 @@
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
-import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import {
   Alert,
   Box,
@@ -169,14 +168,6 @@ export function SettingsPage() {
                     >
                       Cette adresse doit être accessible depuis le téléphone du client.
                     </Typography>
-                    <Button
-                      variant="outlined"
-                      startIcon={<PrintRoundedIcon />}
-                      onClick={() => window.print()}
-                      sx={{ mt: 1.5 }}
-                    >
-                      Imprimer le QR Code
-                    </Button>
                   </Box>
                 </Stack>
               </Box>
@@ -184,14 +175,6 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
-      {mode && (
-        <Box className="qr-print-sheet" aria-hidden="true">
-          <Typography component="h1">Imprimez votre bordereau</Typography>
-          <QRCodeSVG value={clientUrl} size={360} level="M" marginSize={2} />
-          <Typography component="p">Scannez ce QR Code avec votre téléphone</Typography>
-          <Typography component="small">{clientUrl}</Typography>
-        </Box>
-      )}
     </Stack>
   );
 }
