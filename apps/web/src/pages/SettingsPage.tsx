@@ -1,6 +1,6 @@
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
-import QrCode2RoundedIcon from "@mui/icons-material/QrCode2Rounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import {
   Alert,
   Box,
@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "../auth/useAuth";
 
 interface ClientMode {
@@ -132,17 +133,19 @@ export function SettingsPage() {
                 >
                   <Box
                     sx={{
-                      width: 72,
-                      height: 72,
+                      width: 196,
+                      height: 196,
                       borderRadius: 2,
-                      bgcolor: "primary.light",
-                      color: "primary.main",
+                      bgcolor: "common.white",
                       display: "grid",
                       placeItems: "center",
                       flexShrink: 0,
+                      p: 1,
+                      border: "1px solid",
+                      borderColor: "divider",
                     }}
                   >
-                    <QrCode2RoundedIcon sx={{ fontSize: 48 }} />
+                    <QRCodeSVG value={clientUrl} size={176} level="M" marginSize={1} />
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography fontWeight={800} sx={{ mb: 1 }}>
@@ -158,6 +161,14 @@ export function SettingsPage() {
                         Copier
                       </Button>
                     </Stack>
+                    <Button
+                      variant="outlined"
+                      startIcon={<PrintRoundedIcon />}
+                      onClick={() => window.print()}
+                      sx={{ mt: 1.5 }}
+                    >
+                      Imprimer le QR Code
+                    </Button>
                   </Box>
                 </Stack>
               </Box>
@@ -165,6 +176,14 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
+      {mode && (
+        <Box className="qr-print-sheet" aria-hidden="true">
+          <Typography component="h1">Imprimez votre bordereau</Typography>
+          <QRCodeSVG value={clientUrl} size={360} level="M" marginSize={2} />
+          <Typography component="p">Scannez ce QR Code avec votre téléphone</Typography>
+          <Typography component="small">{clientUrl}</Typography>
+        </Box>
+      )}
     </Stack>
   );
 }
