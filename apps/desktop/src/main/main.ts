@@ -15,6 +15,7 @@ let apiServer: Server | undefined;
 let frontendServer: Server | undefined;
 let stopPrintWorker: (() => void) | undefined;
 let disconnectDatabase: (() => Promise<void>) | undefined;
+let stopCloudConnection: (() => void) | undefined;
 
 function listen(serverApp: Express, port: number, host: string) {
   return new Promise<Server>((resolve, reject) => {
@@ -49,10 +50,11 @@ async function prepareRuntime() {
 
 async function startEmbeddedServices() {
   await prepareRuntime();
-  const [{ createApp, createFrontendApp }, { printWorker }, { prisma }] = await Promise.all([
+  const [{ createApp, createFrontendApp }, { printWorker }, { prisma }, cloud] = await Promise.all([
     import("@bv/api"),
     import("@bv/printer"),
     import("@bv/database"),
+    import("@bv/api/cloud"),
   ]);
   const webRoot = app.isPackaged
     ? path.join(process.resourcesPath, "web")
@@ -61,6 +63,8 @@ async function startEmbeddedServices() {
   apiServer = await listen(createApp(), API_PORT, "0.0.0.0");
   frontendServer = await listen(createFrontendApp(webRoot), FRONTEND_PORT, "0.0.0.0");
   void printWorker.start();
+  cloud.startCloudConnection();
+  stopCloudConnection = cloud.stopCloudConnection;
   stopPrintWorker = () => printWorker.stop();
   disconnectDatabase = () => prisma.$disconnect();
 }
@@ -113,6 +117,7 @@ app.on("second-instance", () => {
 
 app.on("before-quit", () => {
   stopPrintWorker?.();
+  stopCloudConnection?.();
   apiServer?.close();
   frontendServer?.close();
   void disconnectDatabase?.();

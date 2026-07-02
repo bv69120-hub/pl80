@@ -46,6 +46,7 @@ process.chdir(databasePackageRoot);
 
 const { createApp } = await import("./app.js");
 const { printWorker } = await import("@bv/printer");
+const { startCloudConnection } = await import("./cloud/cloud.connection.service.js");
 
 const port = Number(process.env.PORT ?? 3333);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -54,6 +55,7 @@ console.log(`[api] Database URL loaded: ${process.env.DATABASE_URL ? "oui" : "no
 
 const app = createApp();
 void printWorker.start();
+startCloudConnection();
 
 app.listen(port, host, () => {
   console.log(`BV Expédition Pro API listening on http://${host}:${port}`);

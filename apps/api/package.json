@@ -10,6 +10,11 @@
       "types": "./dist/app.d.ts",
       "import": "./dist/app.js",
       "default": "./dist/app.js"
+    },
+    "./cloud": {
+      "types": "./dist/cloud/cloud.connection.service.d.ts",
+      "import": "./dist/cloud/cloud.connection.service.js",
+      "default": "./dist/cloud/cloud.connection.service.js"
     }
   },
   "scripts": {
@@ -23,6 +28,7 @@
     "@bv/database": "workspace:*",
     "@bv/printer": "workspace:*",
     "@bv/shared": "workspace:*",
+    "ws": "^8.18.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -37,6 +43,7 @@
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^2.1.0",
+    "@types/ws": "^8.5.13",
     "tsx": "^4.19.2"
   }
 }

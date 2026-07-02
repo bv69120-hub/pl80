@@ -8,7 +8,9 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  FormControlLabel,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -23,15 +25,37 @@ interface ClientMode {
   expiresAt: string | null;
 }
 
+interface CloudStatus {
+  mode: "LOCAL" | "CLOUD";
+  connection: "CONNECTED" | "CONNECTING" | "DISCONNECTED";
+  connected: boolean;
+  storeId: string;
+  cloudUrl: string | null;
+}
+
 export function SettingsPage() {
   const { token: authToken } = useAuth();
   const [mode, setMode] = useState<ClientMode | null>(null);
+  const [cloud, setCloud] = useState<CloudStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const configuredClientBaseUrl = import.meta.env.VITE_PUBLIC_CLIENT_BASE_URL?.trim();
   const clientBaseUrl = (configuredClientBaseUrl || window.location.origin).replace(/\/+$/, "");
-  const clientUrl = mode ? `${clientBaseUrl}/client-print/${mode.token}` : "";
+  const localClientUrl = mode ? `${clientBaseUrl}/client-print/${mode.token}` : "";
+  const clientUrl = cloud?.mode === "CLOUD" && cloud.cloudUrl ? cloud.cloudUrl : localClientUrl;
+
+  const loadCloud = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const response = await fetch(apiUrl("/api/cloud/status"), {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (response.ok) setCloud((await response.json()) as CloudStatus);
+    } catch {
+      /* Le statut déconnecté reste visible. */
+    }
+  }, [authToken]);
 
   const request = useCallback(
     async (path = "", method = "GET") => {
@@ -56,7 +80,30 @@ export function SettingsPage() {
 
   useEffect(() => {
     void request();
-  }, [request]);
+    void loadCloud();
+    const timer = window.setInterval(() => void loadCloud(), 5000);
+    return () => window.clearInterval(timer);
+  }, [request, loadCloud]);
+
+  async function changeConnectionMode(nextMode: "LOCAL" | "CLOUD") {
+    if (!authToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(apiUrl("/api/cloud/mode"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: nextMode }),
+      });
+      if (!response.ok) throw new Error("Impossible de changer le mode de connexion.");
+      setCloud((await response.json()) as CloudStatus);
+      setMessage(nextMode === "CLOUD" ? "Mode Cloud activé." : "Mode Local activé.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function copyUrl() {
     await navigator.clipboard.writeText(clientUrl);
@@ -78,6 +125,40 @@ export function SettingsPage() {
       </Box>
       {message && <Alert severity="success">{message}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
+      <Card>
+        <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={2}>
+              <Box>
+                <Typography variant="h5">État de connexion Cloud</Typography>
+                <Typography color="text.secondary">
+                  La connexion est uniquement sortante depuis ce PC.
+                </Typography>
+              </Box>
+              <Chip
+                label={cloud?.connected ? "🟢 connecté" : "🔴 déconnecté"}
+                color={cloud?.connected ? "success" : "error"}
+                variant={cloud?.connected ? "filled" : "outlined"}
+              />
+            </Stack>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={cloud?.mode === "CLOUD"}
+                  disabled={busy || !cloud}
+                  onChange={(_, checked) => void changeConnectionMode(checked ? "CLOUD" : "LOCAL")}
+                />
+              }
+              label={cloud?.mode === "CLOUD" ? "Mode Cloud" : "Mode Local"}
+            />
+            {cloud?.mode === "CLOUD" && !cloud.storeId && (
+              <Alert severity="warning">
+                STORE_ID et STORE_SECRET doivent être configurés sur ce poste.
+              </Alert>
+            )}
+          </Stack>
+        </CardContent>
+      </Card>
       <Card>
         <CardContent sx={{ p: { xs: 3, md: 4 } }}>
           {!mode ? (

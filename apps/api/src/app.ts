@@ -7,6 +7,7 @@ import { authRouter } from "./auth/auth.routes.js";
 import { printJobsRouter } from "./print-jobs/print.jobs.routes.js";
 import { clientPrintRouter } from "./print-jobs/client.print.routes.js";
 import { clientModeSettingsRouter } from "./settings/client.mode.routes.js";
+import { cloudRouter } from "./cloud/cloud.routes.js";
 
 export function createApp(): Express {
   const app = express();
@@ -19,6 +20,7 @@ export function createApp(): Express {
   app.use("/api/print-jobs", printJobsRouter);
   app.use("/api/client-print", clientPrintRouter);
   app.use("/api/settings/client-mode", clientModeSettingsRouter);
+  app.use("/api/cloud", cloudRouter);
 
   app.get("/health", (_request, response) => {
     response.json({

@@ -79,6 +79,9 @@ importers:
       multer:
         specifier: ^2.2.0
         version: 2.2.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.0
     devDependencies:
       "@types/bcrypt":
         specifier: ^5.0.2
@@ -95,6 +98,9 @@ importers:
       "@types/multer":
         specifier: ^2.1.0
         version: 2.1.0
+      "@types/ws":
+        specifier: ^8.5.13
+        version: 8.18.1
       tsx:
         specifier: ^4.19.2
         version: 4.22.4
@@ -202,6 +208,34 @@ importers:
       "@types/react-dom":
         specifier: ^18.3.5
         version: 18.3.7(@types/react@18.3.31)
+
+  packages/cloud-relay:
+    dependencies:
+      express:
+        specifier: ^4.21.2
+        version: 4.22.2
+      helmet:
+        specifier: ^8.0.0
+        version: 8.2.0
+      multer:
+        specifier: ^2.2.0
+        version: 2.2.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.0
+    devDependencies:
+      "@types/express":
+        specifier: ^5.0.0
+        version: 5.0.6
+      "@types/multer":
+        specifier: ^2.1.0
+        version: 2.1.0
+      "@types/ws":
+        specifier: ^8.5.13
+        version: 8.18.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
 
   packages/database:
     dependencies:
@@ -1886,6 +1920,12 @@ packages:
     resolution:
       {
         integrity: sha512-RlDm9K7+o5stv0Co8i8ZRGxDbrTxhJtgjqjFyVh/tXQyl/rYtTKlnTvZ88oSTeYREWurwx20Js4kTuKCsFkUtg==,
+      }
+
+  "@types/ws@8.18.1":
+    resolution:
+      {
+        integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==,
       }
 
   "@types/yauzl@2.10.3":
@@ -6149,6 +6189,21 @@ packages:
         integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==,
       }
 
+  ws@8.21.0:
+    resolution:
+      {
+        integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==,
+      }
+    engines: { node: ">=10.0.0" }
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: ">=5.0.2"
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xmlbuilder@15.1.1:
     resolution:
       {
@@ -7165,6 +7220,10 @@ snapshots:
 
   "@types/verror@1.10.11":
     optional: true
+
+  "@types/ws@8.18.1":
+    dependencies:
+      "@types/node": 22.20.0
 
   "@types/yauzl@2.10.3":
     dependencies:
@@ -9904,6 +9963,8 @@ snapshots:
       strip-ansi: 7.2.0
 
   wrappy@1.0.2: {}
+
+  ws@8.21.0: {}
 
   xmlbuilder@15.1.1: {}
 
