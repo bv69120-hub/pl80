@@ -7,11 +7,18 @@ import {
 } from "./printer.types.js";
 import { printWithWindowsCommand } from "./printer.windows.js";
 
-const printMode = (process.env.PRINT_MODE ?? "simulation").toLowerCase();
-
 export class PrinterService {
   async printPdf(request: PrintRequest): Promise<PrintResult> {
-    const printerName = request.printerName?.trim() || DEFAULT_PRINTER_NAME;
+    const printMode = (process.env.PRINT_MODE ?? "simulation").toLowerCase();
+    const printerName =
+      request.printerName?.trim() ||
+      process.env.DEFAULT_PRINTER_NAME?.trim() ||
+      DEFAULT_PRINTER_NAME;
+
+    console.info(`[PRINT] PRINT_MODE = ${printMode}`);
+    console.info(
+      `[PRINT] DEFAULT_PRINTER_NAME = ${process.env.DEFAULT_PRINTER_NAME ?? DEFAULT_PRINTER_NAME}`,
+    );
 
     if (!request.filePath) {
       return { success: false, error: "File path is required." };
@@ -22,7 +29,12 @@ export class PrinterService {
     }
 
     if (printMode === "windows") {
-      const result = await printWithWindowsCommand(request.filePath, printerName, request.copies);
+      const result = await printWithWindowsCommand(
+        request.filePath,
+        printerName,
+        request.copies,
+        request.originalFilePath,
+      );
 
       if (!result.success) {
         return {

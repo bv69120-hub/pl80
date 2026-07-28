@@ -30,11 +30,20 @@ export class PrintWorker {
       };
       await job.onStatusChange?.(processingJob.status);
 
-      const result = await printerService.printPdf({
-        filePath: job.filePath,
-        printerName: job.printerName,
-        copies: job.copies,
-      });
+      let result;
+      try {
+        result = await printerService.printPdf({
+          filePath: job.filePath,
+          originalFilePath: job.originalFilePath,
+          printerName: job.printerName,
+          copies: job.copies,
+        });
+      } catch (error) {
+        result = {
+          success: false,
+          error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+        };
+      }
 
       if (result.success) {
         const completedJob: PrintJob = {
@@ -49,7 +58,7 @@ export class PrintWorker {
           status: "FAILED",
         };
 
-        await job.onStatusChange?.(failedJob.status);
+        await job.onStatusChange?.(failedJob.status, result.error ?? "Unknown printing error.");
       }
     }
   }

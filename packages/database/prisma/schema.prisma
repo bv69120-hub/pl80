@@ -30,6 +30,7 @@ model PrintJob {
   adaptation        String?
   adapted           Boolean  @default(false)
   pl80eCompatible   Boolean  @default(false)
+  errorMessage      String?
   createdAt         DateTime @default(now())
   userId            String?
   user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)

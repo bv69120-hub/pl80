@@ -16,16 +16,36 @@ export function clearStoredToken() {
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
-  const response = await fetch(apiUrl("/api/auth/login"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ username, password }),
-  });
+  const url = apiUrl("/api/auth/login");
+  console.info(`[API] Login URL = ${url}`);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+    });
+  } catch (error) {
+    console.error("[API] Login fetch error", { url, error });
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Connexion impossible\nURL : ${url}\nErreur réseau/CORS : ${detail}`);
+  }
 
   if (!response.ok) {
-    throw new Error("Identifiants invalides");
+    let apiMessage = response.statusText;
+    try {
+      const body = (await response.json()) as { message?: unknown };
+      if (typeof body.message === "string") apiMessage = body.message;
+    } catch {
+      // The status and URL remain available when the response is not JSON.
+    }
+    console.error("[API] Login HTTP error", { url, status: response.status, apiMessage });
+    throw new Error(
+      `Échec de connexion\nURL : ${url}\nStatut HTTP : ${response.status}\nAPI : ${apiMessage}`,
+    );
   }
 
   return (await response.json()) as LoginResponse;

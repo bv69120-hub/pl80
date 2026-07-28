@@ -26,6 +26,7 @@ interface HistoryJob {
   printerName: string;
   copies: number;
   createdAt: string;
+  errorMessage: string | null;
   user: { username: string } | null;
 }
 
@@ -102,17 +103,28 @@ export function HistoryPage() {
                     </TableCell>
                     <TableCell>{job.printerName}</TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={job.status}
-                        color={
-                          job.status === "PRINTED"
-                            ? "success"
-                            : job.status === "FAILED"
-                              ? "error"
-                              : "default"
-                        }
-                      />
+                      <Stack spacing={0.75} alignItems="flex-start">
+                        <Chip
+                          size="small"
+                          label={job.status}
+                          color={
+                            job.status === "PRINTED"
+                              ? "success"
+                              : job.status === "FAILED"
+                                ? "error"
+                                : "default"
+                          }
+                        />
+                        {job.status === "FAILED" && job.errorMessage && (
+                          <Typography
+                            variant="caption"
+                            color="error.main"
+                            sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxWidth: 420 }}
+                          >
+                            {job.errorMessage}
+                          </Typography>
+                        )}
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -1,4 +1,4 @@
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import path from "node:path";
 import express, { type Express } from "express";
 import helmet from "helmet";
@@ -9,11 +9,35 @@ import { clientPrintRouter } from "./print-jobs/client.print.routes.js";
 import { clientModeSettingsRouter } from "./settings/client.mode.routes.js";
 import { cloudRouter } from "./cloud/cloud.routes.js";
 
+const electronLocalCorsOptions: CorsOptions = {
+  origin(origin, callback) {
+    if (origin === undefined || origin === "null" || origin.startsWith("file://")) {
+      callback(null, true);
+      return;
+    }
+
+    try {
+      const url = new URL(origin);
+      const isAllowedHttpOrigin =
+        url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost");
+      callback(
+        isAllowedHttpOrigin ? null : new Error(`CORS origin refused: ${origin}`),
+        isAllowedHttpOrigin,
+      );
+    } catch {
+      callback(new Error(`CORS origin refused: ${origin}`), false);
+    }
+  },
+  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  optionsSuccessStatus: 204,
+};
+
 export function createApp(): Express {
   const app = express();
 
   app.use(helmet());
-  app.use(cors());
+  app.use(process.env.BV_ELECTRON_LOCAL === "1" ? cors(electronLocalCorsOptions) : cors());
   app.use(express.json());
 
   app.use("/api/auth", authRouter);

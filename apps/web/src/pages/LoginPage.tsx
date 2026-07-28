@@ -95,7 +95,11 @@ export function LoginPage() {
               </Box>
             </Stack>
 
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && (
+              <Alert severity="error" sx={{ whiteSpace: "pre-line", overflowWrap: "anywhere" }}>
+                {error}
+              </Alert>
+            )}
 
             <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
               <TextField

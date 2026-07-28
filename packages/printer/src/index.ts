@@ -13,6 +13,8 @@ export { PrinterService, printerService } from "./printer.service.js";
 export { printWithWindowsCommand } from "./printer.windows.js";
 export { carrierStrategies, detectCarrier } from "./preparation/carrier.strategies.js";
 export { detectPdfFormat, preparePdfForPrint } from "./preparation/pdf.preparation.js";
+export { createThermalPrintPdf, rasterizeThermalPdf } from "./preparation/thermal.raster.js";
+export type { ThermalPrintPdfResult, ThermalRasterResult } from "./preparation/thermal.raster.js";
 export type {
   AdaptationKind,
   Carrier,

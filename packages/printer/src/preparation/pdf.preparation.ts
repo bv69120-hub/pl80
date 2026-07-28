@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import { PDFDocument } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { detectCarrier, normalizePdfText } from "./carrier.strategies.js";
@@ -15,6 +16,8 @@ import type {
 const POINTS_PER_MM = 72 / 25.4;
 const TARGET_WIDTH = 100 * POINTS_PER_MM;
 const TARGET_HEIGHT = 150 * POINTS_PER_MM;
+const require = createRequire(import.meta.url);
+const standardFontDataUrl = `${path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "standard_fonts")}${path.sep}`;
 
 function closeTo(actual: number, expected: number, tolerance = 4) {
   return Math.abs(actual - expected) <= tolerance;
@@ -34,7 +37,12 @@ export function detectPdfFormat(widthPoints: number, heightPoints: number): PdfF
 async function analyzePdf(bytes: Uint8Array): Promise<PdfAnalysisContext> {
   // pdf.js may transfer and detach its input buffer when using a worker.
   // Keep the original bytes available for pdf-lib's preparation pass.
-  const loadingTask = getDocument({ data: bytes.slice() });
+  const loadingTask = getDocument({
+    data: bytes.slice(),
+    standardFontDataUrl,
+    useSystemFonts: true,
+    disableFontFace: false,
+  });
   const document = await loadingTask.promise;
   try {
     const page = await document.getPage(1);
@@ -77,17 +85,40 @@ async function createLabelPdf(source: PDFDocument, context: PdfAnalysisContext, 
 
   if (cropA4) {
     const anchor = findCarrierAnchor(context);
-    const left = clamp((anchor?.x ?? width / 2) - TARGET_WIDTH / 2, 0, width - TARGET_WIDTH);
-    const bottom = clamp(
-      anchor ? anchor.y - TARGET_HEIGHT + 35 : height - TARGET_HEIGHT,
-      0,
-      height - TARGET_HEIGHT,
-    );
+    const landscape = width > height;
+    const cropWidth = landscape ? TARGET_WIDTH + 56 : TARGET_WIDTH;
+    const cropHeight = landscape ? TARGET_HEIGHT + 56 : TARGET_HEIGHT;
+    const left = landscape
+      ? clamp(
+          anchor
+            ? anchor.x > width / 2
+              ? anchor.x - 24
+              : anchor.x - cropWidth + 24
+            : width - cropWidth,
+          0,
+          width - cropWidth,
+        )
+      : clamp((anchor?.x ?? width / 2) - TARGET_WIDTH / 2, 0, width - TARGET_WIDTH);
+    const bottom = landscape
+      ? clamp(
+          anchor
+            ? anchor.y > height / 2
+              ? anchor.y - cropHeight + 28
+              : anchor.y - 28
+            : height - cropHeight,
+          0,
+          height - cropHeight,
+        )
+      : clamp(
+          anchor ? anchor.y - TARGET_HEIGHT + 35 : height - TARGET_HEIGHT,
+          0,
+          height - TARGET_HEIGHT,
+        );
     embedded = await output.embedPage(sourcePage, {
       left,
       bottom,
-      right: left + TARGET_WIDTH,
-      top: bottom + TARGET_HEIGHT,
+      right: left + cropWidth,
+      top: bottom + cropHeight,
     });
   } else {
     embedded = await output.embedPage(sourcePage);

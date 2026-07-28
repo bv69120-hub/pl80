@@ -5,12 +5,13 @@ export type PrintJobStatus = "PENDING" | "PRINTING" | "PRINTED" | "FAILED";
 export interface PrintJob {
   id: string;
   filePath: string;
+  originalFilePath?: string;
   printerName: string;
   copies: number;
   status: PrintJobStatus;
   createdAt: string;
   source?: "CLIENT" | "EMPLOYEE";
-  onStatusChange?: (status: PrintJobStatus) => void | Promise<void>;
+  onStatusChange?: (status: PrintJobStatus, errorMessage?: string) => void | Promise<void>;
 }
 
 export interface PrintQueueSummary {
@@ -27,6 +28,7 @@ export interface PrinterInfo {
 
 export interface PrintRequest {
   filePath: string;
+  originalFilePath?: string;
   printerName: string;
   copies: number;
 }

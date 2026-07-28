@@ -10,6 +10,7 @@ export default tseslint.config(
     ignores: [
       "**/dist/**",
       "**/build/**",
+      "**/release/**",
       "**/node_modules/**",
       "**/.turbo/**",
       "packages/database/generated/**",

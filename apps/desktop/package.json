@@ -18,7 +18,6 @@
     "@bv/shared": "workspace:*",
     "@bv/ui": "workspace:*",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.1",
     "express": "^4.21.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -28,6 +27,7 @@
     "@types/express": "^5.0.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "electron": "^43.1.0",
     "electron-builder": "^25.1.8",
     "png-to-ico": "^2.1.8"
   },
@@ -35,13 +35,19 @@
     "appId": "fr.bureauvallee.expeditionpro",
     "productName": "BV Expedition Pro",
     "artifactName": "BV-Expedition-Pro-Setup.exe",
+    "asar": false,
     "directories": {
       "output": "release",
       "buildResources": "build"
     },
     "files": [
       "dist/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/.prisma/**/*",
+      "!**/.turbo/**",
+      "!**/*.tsbuildinfo",
+      "!**/release/**",
+      "!**/node_modules/.cache/**"
     ],
     "extraResources": [
       {
@@ -55,12 +61,19 @@
       {
         "from": "build/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "build/tools/SumatraPDF.exe",
+        "to": "tools/SumatraPDF.exe"
+      },
+      {
+        "from": "build/tools/SumatraPDF.exe.sha256",
+        "to": "tools/SumatraPDF.exe.sha256"
+      },
+      {
+        "from": "node_modules/.prisma",
+        "to": "app/node_modules/.prisma"
       }
-    ],
-    "asarUnpack": [
-      "**/*.node",
-      "**/node_modules/.prisma/**/*",
-      "**/node_modules/@prisma/client/**/*"
     ],
     "win": {
       "target": [

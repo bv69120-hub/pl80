@@ -50,19 +50,24 @@ function enqueuePrintJob(job: {
   id: string;
   filename: string;
   filePath: string;
+  originalFilePath?: string;
   source: "CLIENT" | "EMPLOYEE";
   copies?: number;
 }) {
   const queueJob: PrintJob = {
     id: job.id,
     filePath: job.filePath,
+    originalFilePath: job.originalFilePath,
     printerName: "PL80E",
     copies: job.copies ?? 1,
     status: "PENDING",
     source: job.source,
     createdAt: new Date().toISOString(),
-    onStatusChange: async (status: PrintJobStatus) => {
-      await prisma.printJob.update({ where: { id: job.id }, data: { status } });
+    onStatusChange: async (status: PrintJobStatus, errorMessage?: string) => {
+      await prisma.printJob.update({
+        where: { id: job.id },
+        data: { status, errorMessage: status === "FAILED" ? errorMessage : null },
+      });
     },
   };
   printQueue.enqueue(queueJob);
@@ -92,6 +97,7 @@ printJobsRouter.post("/", authenticate, upload.single("file"), async (request, r
       id: job.id,
       filename: job.filename,
       filePath: preparation.preparedPath,
+      originalFilePath,
       source: "EMPLOYEE",
       copies,
     });

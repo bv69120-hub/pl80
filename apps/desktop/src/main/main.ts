@@ -46,6 +46,15 @@ async function prepareRuntime() {
   process.env.DATABASE_URL = `file:${databasePath.replaceAll("\\", "/")}`;
   process.env.PRINT_HISTORY_DIR = historyDirectory;
   process.env.PRINT_MODE ??= "windows";
+  process.env.DEFAULT_PRINTER_NAME ??= "PL80E";
+  process.env.SUMATRA_BUNDLED_PATH = app.isPackaged
+    ? path.join(process.resourcesPath, "tools", "SumatraPDF.exe")
+    : path.resolve(__dirname, "../../build/tools/SumatraPDF.exe");
+  process.env.BV_ELECTRON_LOCAL = "1";
+
+  console.info(`[PRINT] PRINT_MODE = ${process.env.PRINT_MODE}`);
+  console.info(`[PRINT] DEFAULT_PRINTER_NAME = ${process.env.DEFAULT_PRINTER_NAME}`);
+  console.info(`[PRINT] SUMATRA_BUNDLED_PATH = ${process.env.SUMATRA_BUNDLED_PATH}`);
 }
 
 async function startEmbeddedServices() {
@@ -59,6 +68,14 @@ async function startEmbeddedServices() {
   const webRoot = app.isPackaged
     ? path.join(process.resourcesPath, "web")
     : path.resolve(__dirname, "../../../web/dist");
+
+  try {
+    await prisma.$executeRawUnsafe('ALTER TABLE "PrintJob" ADD COLUMN "errorMessage" TEXT');
+    console.info("[DATABASE] Added PrintJob.errorMessage");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("duplicate column name")) throw error;
+  }
 
   apiServer = await listen(createApp(), API_PORT, "0.0.0.0");
   frontendServer = await listen(createFrontendApp(webRoot), FRONTEND_PORT, "0.0.0.0");
@@ -83,9 +100,11 @@ async function createWindow() {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: [`--bv-packaged=${String(app.isPackaged)}`],
     },
   });
-  await window.loadURL(`http://127.0.0.1:${FRONTEND_PORT}`);
+  const packagedMarker = app.isPackaged ? "?bv-desktop=packaged" : "";
+  await window.loadURL(`http://127.0.0.1:${FRONTEND_PORT}${packagedMarker}`);
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
