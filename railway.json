@@ -1,0 +1,20 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter @bv/cloud-relay build",
+    "watchPatterns": [
+      "/packages/cloud-relay/**",
+      "/pnpm-lock.yaml",
+      "/pnpm-workspace.yaml",
+      "/package.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "pnpm --filter @bv/cloud-relay start",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
