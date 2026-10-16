@@ -34,6 +34,7 @@ export interface PdfAnalysisContext {
   textPositions: TextPosition[];
   width: number;
   height: number;
+  rotation: number;
 }
 
 export interface CarrierStrategy {

@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { DEFAULT_PRINTER_NAME, type PrinterInfo } from "./printer.types.js";
+import {
+  DEFAULT_PRINTER_NAME,
+  type PrintCompletionStatus,
+  type PrinterInfo,
+} from "./printer.types.js";
 import { createThermalPrintPdf, rasterizeThermalPdf } from "./preparation/thermal.raster.js";
 
 interface CommandResult {
@@ -25,6 +29,11 @@ interface PrintJobSnapshot {
   commandResult: CommandResult;
 }
 
+interface PrinterDiagnostic {
+  printer: Record<string, unknown> | null;
+  commandResult: CommandResult;
+}
+
 interface PrintJobPollResult {
   snapshots: WindowsPrintJob[][];
   commandResult: CommandResult;
@@ -33,12 +42,16 @@ interface PrintJobPollResult {
 
 const SPOOL_POLL_INTERVAL_MS = 250;
 const SPOOL_POLL_DURATION_MS = 8_000;
-const NO_WINDOWS_JOB_ERROR =
-  "Sumatra a terminé sans erreur, mais aucun job Windows n’a été créé pour PL80E.";
 const WINDOWS_JOB_FAILED_ERROR =
   "Un job Windows a été créé pour PL80E, mais le spooler signale un état d’erreur.";
 
-type SumatraSource = "env" | "localAppData" | "programFiles" | "bundled";
+type SumatraSource =
+  | "command"
+  | "sumatraPath"
+  | "localAppData"
+  | "programFiles"
+  | "programFilesX86"
+  | "bundled";
 
 interface ResolvedSumatra {
   path: string;
@@ -87,14 +100,12 @@ function parseExplicitCommand(command: string) {
   return { executable, args };
 }
 
-function validateBundledSumatra(executablePath: string) {
+export function validateBundledSumatra(executablePath: string) {
   const manifestPath = `${executablePath}.sha256`;
   if (!existsSync(executablePath) || !existsSync(manifestPath)) return false;
   const expectedHash = readFileSync(manifestPath, "utf8").trim().toUpperCase();
   const actualHash = sha256(executablePath);
-  if (!expectedHash || expectedHash !== actualHash) return false;
-  const localPath = pathFromEnvironment("LOCALAPPDATA", "SumatraPDF", "SumatraPDF.exe");
-  return !localPath || !existsSync(localPath) || sha256(localPath) === actualHash;
+  return Boolean(expectedHash) && expectedHash === actualHash;
 }
 
 function pathFromEnvironment(variable: string, ...parts: string[]) {
@@ -102,20 +113,21 @@ function pathFromEnvironment(variable: string, ...parts: string[]) {
   return root ? [root, ...parts].join("\\") : "";
 }
 
-function resolveSumatra(): ResolvedSumatra | null {
+export function resolveSumatra(): ResolvedSumatra | null {
   const explicit = process.env.PRINT_COMMAND?.trim();
   if (explicit) {
     const parsed = parseExplicitCommand(explicit);
     if (parsed.executable && existsSync(parsed.executable)) {
       return {
         path: parsed.executable,
-        source: "env",
+        source: "command",
         sha256: sha256(parsed.executable),
         prefixArgs: parsed.args,
       };
     }
   }
-  const candidates: Array<{ path: string; source: Exclude<SumatraSource, "env"> }> = [
+  const candidates: Array<{ path: string; source: Exclude<SumatraSource, "command"> }> = [
+    { path: process.env.SUMATRA_PATH?.trim() ?? "", source: "sumatraPath" },
     {
       path: pathFromEnvironment("LOCALAPPDATA", "SumatraPDF", "SumatraPDF.exe"),
       source: "localAppData",
@@ -123,6 +135,10 @@ function resolveSumatra(): ResolvedSumatra | null {
     {
       path: pathFromEnvironment("ProgramFiles", "SumatraPDF", "SumatraPDF.exe"),
       source: "programFiles",
+    },
+    {
+      path: pathFromEnvironment("ProgramFiles(x86)", "SumatraPDF", "SumatraPDF.exe"),
+      source: "programFilesX86",
     },
     { path: process.env.SUMATRA_BUNDLED_PATH?.trim() ?? "", source: "bundled" },
   ];
@@ -190,6 +206,28 @@ async function getPrintJobs(printerName: string): Promise<PrintJobSnapshot> {
     }
   }
   return { jobs, commandResult };
+}
+
+async function getWindowsPrinterInfo(printerName: string): Promise<PrinterDiagnostic> {
+  const escapedPrinter = printerName.replaceAll("'", "''");
+  const spoolerScript =
+    `Get-Printer -Name '${escapedPrinter}' -ErrorAction Stop | ` +
+    "Select-Object Name,DriverName,PortName,PrinterStatus,WorkOffline,Shared | ConvertTo-Json -Compress";
+  const commandResult = await runCommand("powershell.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    spoolerScript,
+  ]);
+  let printer: Record<string, unknown> | null = null;
+  if (commandResult.exitCode === 0 && commandResult.stdout) {
+    try {
+      printer = JSON.parse(commandResult.stdout) as Record<string, unknown>;
+    } catch (error) {
+      commandResult.spawnError = `Invalid Get-Printer JSON: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  return { printer, commandResult };
 }
 
 async function pollPrintJobs(printerName: string): Promise<PrintJobPollResult> {
@@ -264,7 +302,7 @@ export async function printWithWindowsCommand(
   printerName: string,
   copies: number,
   originalFilePath?: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; status?: PrintCompletionStatus; error?: string }> {
   const configuredPrinter = process.env.DEFAULT_PRINTER_NAME?.trim() || DEFAULT_PRINTER_NAME;
   const pdf = fileDiagnostic(filePath);
   const sourcePdf = fileDiagnostic(originalFilePath ?? filePath);
@@ -272,6 +310,11 @@ export async function printWithWindowsCommand(
   const baseDiagnostics: Record<string, unknown> = {
     PRINT_MODE: process.env.PRINT_MODE ?? "(unset)",
     DEFAULT_PRINTER_NAME: configuredPrinter,
+    SUMATRA_PATH: process.env.SUMATRA_PATH?.trim() || "(unset)",
+    LOCALAPPDATA: process.env.LOCALAPPDATA ?? "(unset)",
+    runtimeProcessId: process.pid,
+    runtimeWorkingDirectory: process.cwd(),
+    printerModule: import.meta.url,
     requestedPrinter: printerName,
     sourcePdf,
     preparedPdf: pdf,
@@ -350,10 +393,26 @@ export async function printWithWindowsCommand(
   });
   console.info(`[PRINT] thermal PDF = ${diagnosticsText(baseDiagnostics)}`);
 
-  const jobsBefore = await getPrintJobs(printerName);
+  const [jobsBefore, printerBefore] = await Promise.all([
+    getPrintJobs(printerName),
+    getWindowsPrinterInfo(printerName),
+  ]);
+  console.info(`[PRINT] printer before = ${JSON.stringify(printerBefore.printer)}`);
+  console.info(`[PRINT] Get-Printer before command = ${printerBefore.commandResult.command}`);
+  console.info(`[PRINT] Get-Printer before stdout = ${printerBefore.commandResult.stdout}`);
+  console.info(`[PRINT] Get-Printer before stderr = ${printerBefore.commandResult.stderr}`);
+  console.info(
+    `[PRINT] Get-Printer before exitCode = ${String(printerBefore.commandResult.exitCode)}`,
+  );
+  console.info(
+    `[PRINT] Get-Printer before spawnError = ${printerBefore.commandResult.spawnError ?? ""}`,
+  );
   console.info(`[PRINT] jobs before command = ${JSON.stringify(jobsBefore.jobs)}`);
+  console.info(`[PRINT] Get-PrintJob before command = ${jobsBefore.commandResult.command}`);
+  console.info(`[PRINT] Get-PrintJob before stdout = ${jobsBefore.commandResult.stdout}`);
   console.info(`[PRINT] jobs before stderr = ${jobsBefore.commandResult.stderr}`);
   console.info(`[PRINT] jobs before exitCode = ${String(jobsBefore.commandResult.exitCode)}`);
+  console.info(`[PRINT] jobs before spawnError = ${jobsBefore.commandResult.spawnError ?? ""}`);
 
   const sumatraArgs = [
     ...sumatra.prefixArgs,
@@ -376,14 +435,27 @@ export async function printWithWindowsCommand(
   console.info(`[PRINT] exitCode = ${String(sumatraResult.exitCode)}`);
 
   const jobsAfter = await jobsAfterPromise;
+  const printerAfter = await getWindowsPrinterInfo(printerName);
   const windowsJobDetected = jobsAfter.snapshots.some((snapshot) =>
     detectsWindowsPrintActivity(jobsBefore.jobs, snapshot),
   );
   const windowsJobError = spoolerReportsError(jobsBefore.jobs, jobsAfter.snapshots);
   console.info(`[PRINT] jobs after command = ${JSON.stringify(jobsAfter.snapshots)}`);
+  console.info(`[PRINT] printer after = ${JSON.stringify(printerAfter.printer)}`);
+  console.info(`[PRINT] Get-Printer after command = ${printerAfter.commandResult.command}`);
+  console.info(`[PRINT] Get-Printer after stdout = ${printerAfter.commandResult.stdout}`);
+  console.info(`[PRINT] Get-Printer after stderr = ${printerAfter.commandResult.stderr}`);
+  console.info(
+    `[PRINT] Get-Printer after exitCode = ${String(printerAfter.commandResult.exitCode)}`,
+  );
+  console.info(
+    `[PRINT] Get-Printer after spawnError = ${printerAfter.commandResult.spawnError ?? ""}`,
+  );
   console.info(`[PRINT] Get-PrintJob command = ${jobsAfter.commandResult.command}`);
+  console.info(`[PRINT] Get-PrintJob stdout = ${jobsAfter.commandResult.stdout}`);
   console.info(`[PRINT] Get-PrintJob stderr = ${jobsAfter.commandResult.stderr}`);
   console.info(`[PRINT] Get-PrintJob exitCode = ${String(jobsAfter.commandResult.exitCode)}`);
+  console.info(`[PRINT] Get-PrintJob spawnError = ${jobsAfter.commandResult.spawnError ?? ""}`);
   console.info(`[PRINT] spool poll count = ${jobsAfter.snapshots.length}`);
   console.info(`[PRINT] spool poll duration ms = ${jobsAfter.durationMs}`);
   console.info(`[PRINT] Windows job detected = ${String(windowsJobDetected)}`);
@@ -397,8 +469,18 @@ export async function printWithWindowsCommand(
     stderr: sumatraResult.stderr,
     exitCode: sumatraResult.exitCode,
     spawnError: sumatraResult.spawnError ?? "",
+    printerBefore: printerBefore.printer,
+    getPrinterBeforeCommand: printerBefore.commandResult.command,
+    getPrinterBeforeStderr: printerBefore.commandResult.stderr,
+    getPrinterBeforeExitCode: printerBefore.commandResult.exitCode,
+    getPrinterBeforeSpawnError: printerBefore.commandResult.spawnError ?? "",
     jobsBefore: jobsBefore.jobs,
     jobsAfter: jobsAfter.snapshots,
+    printerAfter: printerAfter.printer,
+    getPrinterAfterCommand: printerAfter.commandResult.command,
+    getPrinterAfterStderr: printerAfter.commandResult.stderr,
+    getPrinterAfterExitCode: printerAfter.commandResult.exitCode,
+    getPrinterAfterSpawnError: printerAfter.commandResult.spawnError ?? "",
     getPrintJobCommand: jobsAfter.commandResult.command,
     getPrintJobStderr: jobsAfter.commandResult.stderr,
     getPrintJobExitCode: jobsAfter.commandResult.exitCode,
@@ -416,10 +498,9 @@ export async function printWithWindowsCommand(
   }
 
   if (!windowsJobDetected) {
-    return {
-      success: false,
-      error: diagnosticsText({ failure: NO_WINDOWS_JOB_ERROR, ...diagnostics }),
-    };
+    console.warn(
+      `[PRINT] Sumatra completed successfully, but no matching Windows spooler job was observed. ${diagnosticsText(diagnostics)}`,
+    );
   }
   if (windowsJobError) {
     return {
@@ -428,5 +509,8 @@ export async function printWithWindowsCommand(
     };
   }
 
-  return { success: true };
+  return {
+    success: true,
+    status: windowsJobDetected ? "SPOOLER_OBSERVED" : "SUBMITTED",
+  };
 }

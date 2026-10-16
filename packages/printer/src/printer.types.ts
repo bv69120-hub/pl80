@@ -1,6 +1,8 @@
 export const DEFAULT_PRINTER_NAME = "PL80E";
 
-export type PrintJobStatus = "PENDING" | "PRINTING" | "PRINTED" | "FAILED";
+export type PrintJobStatus = "PENDING" | "PRINTING" | "SUBMITTED" | "SPOOLER_OBSERVED" | "FAILED";
+
+export type PrintCompletionStatus = "SUBMITTED" | "SPOOLER_OBSERVED";
 
 export interface PrintJob {
   id: string;
@@ -17,7 +19,7 @@ export interface PrintJob {
 export interface PrintQueueSummary {
   pending: PrintJob[];
   inProgress: PrintJob[];
-  completed: PrintJob[];
+  submitted: PrintJob[];
 }
 
 export interface PrinterInfo {
@@ -36,5 +38,6 @@ export interface PrintRequest {
 export interface PrintResult {
   success: boolean;
   jobId?: string;
+  status?: PrintCompletionStatus;
   error?: string;
 }

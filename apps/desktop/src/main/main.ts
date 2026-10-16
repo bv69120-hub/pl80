@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog } from "electron";
 import type { Express } from "express";
+import { loadEnvFile } from "@bv/api/env";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +26,15 @@ function listen(serverApp: Express, port: number, host: string) {
 }
 
 async function prepareRuntime() {
+  if (!app.isPackaged) {
+    loadEnvFile(path.resolve(__dirname, "../../../../.env"), [
+      "PRINT_MODE",
+      "DEFAULT_PRINTER_NAME",
+      "PRINT_COMMAND",
+      "SUMATRA_PATH",
+    ]);
+  }
+
   const userData = app.getPath("userData");
   const dataDirectory = path.join(userData, "data");
   const databasePath = path.join(dataDirectory, "bv-expedition.db");
@@ -54,6 +64,7 @@ async function prepareRuntime() {
 
   console.info(`[PRINT] PRINT_MODE = ${process.env.PRINT_MODE}`);
   console.info(`[PRINT] DEFAULT_PRINTER_NAME = ${process.env.DEFAULT_PRINTER_NAME}`);
+  console.info(`[PRINT] SUMATRA_PATH = ${process.env.SUMATRA_PATH ?? "(unset)"}`);
   console.info(`[PRINT] SUMATRA_BUNDLED_PATH = ${process.env.SUMATRA_BUNDLED_PATH}`);
 }
 

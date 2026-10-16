@@ -2,14 +2,19 @@ import { existsSync } from "node:fs";
 import {
   DEFAULT_PRINTER_NAME,
   type PrinterInfo,
+  type PrintCompletionStatus,
   type PrintRequest,
   type PrintResult,
 } from "./printer.types.js";
 import { printWithWindowsCommand } from "./printer.windows.js";
 
+export function resolvePrintMode() {
+  return (process.env.PRINT_MODE ?? "windows").trim().toLowerCase();
+}
+
 export class PrinterService {
   async printPdf(request: PrintRequest): Promise<PrintResult> {
-    const printMode = (process.env.PRINT_MODE ?? "simulation").toLowerCase();
+    const printMode = resolvePrintMode();
     const printerName =
       request.printerName?.trim() ||
       process.env.DEFAULT_PRINTER_NAME?.trim() ||
@@ -46,12 +51,16 @@ export class PrinterService {
       return {
         success: true,
         jobId: `windows-${Date.now()}`,
+        status: result.status ?? ("SUBMITTED" satisfies PrintCompletionStatus),
       };
     }
 
     return {
-      success: true,
-      jobId: `simulation-${Date.now()}`,
+      success: false,
+      error:
+        printMode === "simulation"
+          ? "Simulation mode cannot confirm a physical print. Set PRINT_MODE=windows to use the Windows printer."
+          : `Unsupported print mode: ${printMode}. Set PRINT_MODE=windows to use the Windows printer.`,
     };
   }
 

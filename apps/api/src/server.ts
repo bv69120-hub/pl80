@@ -1,41 +1,6 @@
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-function loadEnvFile(filePath: string) {
-  if (!fs.existsSync(filePath)) {
-    return;
-  }
-
-  const content = fs.readFileSync(filePath, "utf8");
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed = line.trim();
-
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    const separatorIndex = trimmed.indexOf("=");
-
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    let value = trimmed.slice(separatorIndex + 1).trim();
-
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-}
+import { loadEnvFile } from "./env.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../");
 const databasePackageRoot = path.join(repoRoot, "packages/database");
@@ -43,6 +8,10 @@ const envPath = path.join(repoRoot, ".env");
 
 loadEnvFile(envPath);
 process.chdir(databasePackageRoot);
+
+console.info(`[api] PRINT_MODE = ${process.env.PRINT_MODE ?? "(default: windows)"}`);
+console.info(`[api] SUMATRA_PATH = ${process.env.SUMATRA_PATH ?? "(unset)"}`);
+console.info(`[api] LOCALAPPDATA = ${process.env.LOCALAPPDATA ?? "(unset)"}`);
 
 const { createApp } = await import("./app.js");
 const { printWorker } = await import("@bv/printer");

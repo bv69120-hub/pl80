@@ -1,6 +1,11 @@
 import { printQueue } from "./print.queue.js";
 import { printerService } from "./printer.service.js";
-import type { PrintJob } from "./printer.types.js";
+import type { PrintJob, PrintJobStatus, PrintResult } from "./printer.types.js";
+
+export function getFinalPrintStatus(result: PrintResult): PrintJobStatus {
+  if (!result.success) return "FAILED";
+  return result.status ?? "SUBMITTED";
+}
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -45,21 +50,12 @@ export class PrintWorker {
         };
       }
 
-      if (result.success) {
-        const completedJob: PrintJob = {
-          ...job,
-          status: "PRINTED",
-        };
-
-        await job.onStatusChange?.(completedJob.status);
-      } else {
-        const failedJob: PrintJob = {
-          ...job,
-          status: "FAILED",
-        };
-
-        await job.onStatusChange?.(failedJob.status, result.error ?? "Unknown printing error.");
-      }
+      const finalStatus = getFinalPrintStatus(result);
+      const finalJob: PrintJob = { ...job, status: finalStatus };
+      await job.onStatusChange?.(
+        finalJob.status,
+        finalJob.status === "FAILED" ? (result.error ?? "Unknown printing error.") : undefined,
+      );
     }
   }
 

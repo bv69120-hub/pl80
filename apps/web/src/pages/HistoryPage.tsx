@@ -30,6 +30,18 @@ interface HistoryJob {
   user: { username: string } | null;
 }
 
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "En attente",
+    PRINTING: "Envoi en cours",
+    SUBMITTED: "Commande terminée, spooler non observé",
+    SPOOLER_OBSERVED: "Travail observé dans le spooler",
+    FAILED: "Échec",
+    PRINTED: "Ancien statut non vérifiable",
+  };
+  return labels[status] ?? status;
+}
+
 export function HistoryPage() {
   const { token } = useAuth();
   const [jobs, setJobs] = useState<HistoryJob[]>([]);
@@ -106,13 +118,15 @@ export function HistoryPage() {
                       <Stack spacing={0.75} alignItems="flex-start">
                         <Chip
                           size="small"
-                          label={job.status}
+                          label={statusLabel(job.status)}
                           color={
-                            job.status === "PRINTED"
-                              ? "success"
-                              : job.status === "FAILED"
-                                ? "error"
-                                : "default"
+                            job.status === "FAILED"
+                              ? "error"
+                              : job.status === "SPOOLER_OBSERVED"
+                                ? "warning"
+                                : job.status === "SUBMITTED"
+                                  ? "info"
+                                  : "default"
                           }
                         />
                         {job.status === "FAILED" && job.errorMessage && (

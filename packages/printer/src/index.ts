@@ -2,6 +2,7 @@ export {
   DEFAULT_PRINTER_NAME,
   type PrintJob,
   type PrintJobStatus,
+  type PrintCompletionStatus,
   type PrintQueueSummary,
   type PrinterInfo,
   type PrintRequest,

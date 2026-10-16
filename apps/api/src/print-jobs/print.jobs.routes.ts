@@ -154,7 +154,7 @@ printJobsRouter.get("/status", authenticate, (_request, response) => {
   response.json({
     pending: jobs.filter((job) => job.status === "PENDING"),
     inProgress: jobs.filter((job) => job.status === "PRINTING"),
-    completed: jobs.filter((job) => job.status === "PRINTED"),
+    submitted: jobs.filter((job) => ["SUBMITTED", "SPOOLER_OBSERVED"].includes(job.status)),
   });
 });
 

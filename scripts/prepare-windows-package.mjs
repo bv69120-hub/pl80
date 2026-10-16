@@ -1,8 +1,11 @@
 import { spawnSync } from "node:child_process";
+import { Buffer } from "node:buffer";
+import console from "node:console";
 import { access, copyFile, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import path from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 
@@ -97,14 +100,26 @@ function createIco(png) {
 
 await mkdir(databaseDirectory, { recursive: true });
 await mkdir(toolsDirectory, { recursive: true });
-const sumatraSourcePath =
-  process.env.SUMATRA_PATH ??
-  path.join(process.env.LOCALAPPDATA ?? "", "SumatraPDF", "SumatraPDF.exe");
-try {
-  await access(sumatraSourcePath);
-} catch {
-  throw new Error(`SumatraPDF introuvable pour le packaging : ${sumatraSourcePath}`);
+const sumatraCandidates = [
+  process.env.SUMATRA_PATH,
+  path.join(process.env.LOCALAPPDATA ?? "", "SumatraPDF", "SumatraPDF.exe"),
+  path.join(process.env.ProgramFiles ?? "", "SumatraPDF", "SumatraPDF.exe"),
+  path.join(process.env["ProgramFiles(x86)"] ?? "", "SumatraPDF", "SumatraPDF.exe"),
+].filter(Boolean);
+let sumatraSourcePath;
+for (const candidate of sumatraCandidates) {
+  try {
+    await access(candidate);
+    sumatraSourcePath = candidate;
+    break;
+  } catch {
+    // Try the next locally installed or explicitly configured executable.
+  }
 }
+if (!sumatraSourcePath)
+  throw new Error(
+    `SumatraPDF introuvable pour le packaging. Configurez SUMATRA_PATH avec un exécutable installé et validé. Chemins vérifiés : ${sumatraCandidates.join(", ")}`,
+  );
 
 async function sha256(filePath) {
   return createHash("sha256").update(await readFile(filePath)).digest("hex").toUpperCase();

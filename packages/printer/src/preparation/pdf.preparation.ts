@@ -3,7 +3,7 @@ import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { PDFDocument } from "pdf-lib";
+import { degrees, PDFDocument } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { detectCarrier, normalizePdfText } from "./carrier.strategies.js";
 import type {
@@ -57,6 +57,7 @@ async function analyzePdf(bytes: Uint8Array): Promise<PdfAnalysisContext> {
       textPositions,
       width: viewport.width,
       height: viewport.height,
+      rotation: page.rotate,
     };
   } finally {
     await document.destroy();
@@ -75,6 +76,96 @@ function findCarrierAnchor(context: PdfAnalysisContext) {
     const text = normalizePdfText(position.text);
     return words.some((word) => text.includes(word));
   });
+}
+
+export function detectColissimoSplit(context: PdfAnalysisContext): number | undefined {
+  if (detectCarrier(context) !== "COLISSIMO" || context.width <= context.height * 1.12) {
+    return undefined;
+  }
+
+  const normalizedPositions = context.textPositions.map((position) => ({
+    ...position,
+    normalizedText: normalizePdfText(position.text),
+  }));
+  const leftCarrierAnchor = normalizedPositions.some(
+    (position) =>
+      position.x < context.width * 0.65 &&
+      (position.normalizedText.includes("COLISSIMO") ||
+        position.normalizedText.includes("LA POSTE")),
+  );
+  const rightPanelText = normalizedPositions
+    .filter((position) => position.x >= context.width * 0.35)
+    .map((position) => position.normalizedText)
+    .join(" ");
+  const receiptHeading =
+    /(?:PREUVE|JUSTIFICATIF|BORDEREAU|RECU).{0,24}DEPOT|DEPOT.{0,24}(?:PREUVE|JUSTIFICATIF|BORDEREAU|RECU)/;
+  const hasDepositProof = receiptHeading.test(rightPanelText);
+
+  if (!leftCarrierAnchor || !hasDepositProof) return undefined;
+
+  const xPositions = [...new Set(normalizedPositions.map((position) => position.x))]
+    .filter((x) => Number.isFinite(x) && x > 0 && x < context.width)
+    .sort((left, right) => left - right);
+  let splitX: number | undefined;
+  let widestGap = Math.max(24, context.width * 0.05);
+
+  for (let index = 1; index < xPositions.length; index += 1) {
+    const gap = xPositions[index] - xPositions[index - 1];
+    const candidateSplit = (xPositions[index] + xPositions[index - 1]) / 2;
+    if (
+      gap > widestGap &&
+      candidateSplit >= context.width * 0.3 &&
+      candidateSplit <= context.width * 0.7
+    ) {
+      widestGap = gap;
+      splitX = candidateSplit;
+    }
+  }
+
+  if (splitX === undefined) return undefined;
+
+  const leftAnchorIsLeft = normalizedPositions.some(
+    (position) =>
+      position.x < splitX &&
+      (position.normalizedText.includes("COLISSIMO") ||
+        position.normalizedText.includes("LA POSTE")),
+  );
+  const proofIsRight = normalizedPositions.some(
+    (position) =>
+      position.x > splitX &&
+      /PREUVE|JUSTIFICATIF|BORDEREAU|RECU|DEPOT/.test(position.normalizedText),
+  );
+
+  return leftAnchorIsLeft && proofIsRight ? splitX : undefined;
+}
+
+async function createColissimoSplitPdf(source: PDFDocument, splitX: number, rotation: number) {
+  const sourcePage = source.getPage(0);
+  const { width, height } = sourcePage.getSize();
+  const output = await PDFDocument.create();
+  const cropBox =
+    rotation === 180
+      ? { left: width - splitX, bottom: 0, right: width, top: height }
+      : { left: 0, bottom: 0, right: splitX, top: height };
+  const embedded = await output.embedPage(sourcePage, cropBox);
+  const page = output.addPage([TARGET_WIDTH, TARGET_HEIGHT]);
+  const rotateCrop = embedded.width > embedded.height;
+  const orientedWidth = rotateCrop ? embedded.height : embedded.width;
+  const orientedHeight = rotateCrop ? embedded.width : embedded.height;
+  const scale = Math.min(TARGET_WIDTH / orientedWidth, TARGET_HEIGHT / orientedHeight);
+  const drawnWidth = embedded.width * scale;
+  const drawnHeight = embedded.height * scale;
+  const pageRotation = ((rotation % 360) + 360) % 360;
+  const drawRotation = rotateCrop ? (pageRotation + 90) % 360 : pageRotation;
+
+  page.drawPage(embedded, {
+    x: (TARGET_WIDTH - drawnWidth) / 2,
+    y: (TARGET_HEIGHT - drawnHeight) / 2,
+    width: drawnWidth,
+    height: drawnHeight,
+    rotate: degrees(drawRotation),
+  });
+  return output.save();
 }
 
 async function createLabelPdf(source: PDFDocument, context: PdfAnalysisContext, cropA4: boolean) {
@@ -142,6 +233,23 @@ export async function preparePdfForPrint(filePath: string): Promise<PdfPreparati
   const context = await analyzePdf(input);
   const format = detectPdfFormat(context.width, context.height);
   const carrier = detectCarrier(context);
+  const colissimoSplit = detectColissimoSplit(context);
+
+  if (colissimoSplit !== undefined) {
+    const source = await PDFDocument.load(input);
+    const preparedBytes = await createColissimoSplitPdf(source, colissimoSplit, context.rotation);
+    const preparedPath = path.join(os.tmpdir(), `bv-pl80e-colissimo-${randomUUID()}.pdf`);
+    await writeFile(preparedPath, preparedBytes);
+    return {
+      originalPath: filePath,
+      preparedPath,
+      carrier,
+      format,
+      adaptation: "LABEL_EXTRACTED",
+      adapted: true,
+      compatiblePL80E: true,
+    };
+  }
 
   if (format === "100x150") {
     return {
