@@ -17,8 +17,9 @@ export function App() {
       <CssBaseline />
       <AuthProvider>
         <Routes>
-          <Route path="/client-print" element={<ClientPrintPage />} />
-          <Route path="/client-print/:token" element={<ClientPrintPage />} />
+          <Route path="/client-print" element={<ClientPrintPage mode="local" />} />
+          <Route path="/client-print/:token" element={<ClientPrintPage mode="local" />} />
+          <Route path="/:storeId" element={<ClientPrintPage mode="cloud" />} />
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>

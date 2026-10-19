@@ -40,3 +40,216 @@ select {
   border-radius: 4px;
   box-shadow: 0 8px 24px rgba(0, 43, 92, 0.16);
 }
+
+.client-portal-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 212, 0, 0.12), transparent 34rem),
+    linear-gradient(160deg, #f8fafc 45%, #edf3f9 100%);
+}
+
+.client-portal-content {
+  animation: client-portal-appear 420ms ease-out both;
+}
+
+.client-portal-card {
+  overflow: hidden;
+}
+
+.client-portal-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 14px 7px 7px;
+  border: 1px solid #dce6f1;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 43, 92, 0.06);
+}
+
+.client-portal-brand-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #003b7a;
+  color: #ffd400;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+}
+
+.client-portal-brand-mark.small {
+  width: 27px;
+  height: 27px;
+  font-size: 10px;
+}
+
+.client-portal-upload {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 22px 16px;
+  border: 2px dashed #9db4cc;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fbfdff, #f5f8fc);
+  text-align: center;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.client-portal-upload:hover {
+  border-color: #003b7a;
+  background: #f2f7fc;
+}
+
+.client-portal-upload:focus-within {
+  outline: 3px solid rgba(0, 59, 122, 0.2);
+  outline-offset: 2px;
+}
+
+.client-portal-upload.has-file {
+  border-color: #7eb99a;
+  background: linear-gradient(145deg, #f6fcf8, #edf8f1);
+}
+
+.client-portal-upload-icon,
+.client-portal-section-icon,
+.client-portal-unavailable-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #003b7a;
+}
+
+.client-portal-upload-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  background: #e7f0fa;
+}
+
+.client-portal-upload-icon svg {
+  font-size: 32px;
+}
+
+.client-portal-section-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #eaf1f9;
+}
+
+.client-portal-section-icon svg {
+  font-size: 23px;
+}
+
+.client-portal-preview {
+  display: grid;
+  min-height: 270px;
+  max-height: 520px;
+  overflow: auto;
+  place-items: center;
+  padding: 12px;
+  border: 1px solid #e2e9f1;
+  border-radius: 16px;
+  background:
+    linear-gradient(45deg, #f1f4f8 25%, transparent 25%),
+    linear-gradient(-45deg, #f1f4f8 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f1f4f8 75%),
+    linear-gradient(-45deg, transparent 75%, #f1f4f8 75%), #f8fafc;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+}
+
+.client-portal-preview .react-pdf__Page {
+  max-width: 100%;
+}
+
+.client-portal-preview .react-pdf__Page__canvas {
+  max-width: 100%;
+  height: auto !important;
+  border-radius: 6px;
+  box-shadow: 0 12px 28px rgba(0, 43, 92, 0.16);
+}
+
+.client-portal-print-card {
+  border-top: 3px solid #ffd400 !important;
+}
+
+.client-portal-success-icon {
+  display: grid;
+  width: 86px;
+  height: 86px;
+  margin: 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #eaf7ef;
+  color: #008c3a;
+  animation: client-portal-success 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.client-portal-unavailable-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #edf3f9;
+}
+
+.client-portal-unavailable-icon svg {
+  font-size: 38px;
+}
+
+.client-portal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 3px 0 8px;
+}
+
+@keyframes client-portal-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes client-portal-success {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .client-portal-content,
+  .client-portal-success-icon {
+    animation: none;
+  }
+
+  .client-portal-upload {
+    transition: none;
+  }
+}

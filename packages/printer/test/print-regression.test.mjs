@@ -7,12 +7,13 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { createCanvas } from "canvas";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { degrees, PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { resolvePrintMode, PrinterService } from "../dist/printer.service.js";
 import { getFinalPrintStatus } from "../dist/print.worker.js";
 import { resolveSumatra, validateBundledSumatra } from "../dist/printer.windows.js";
 import {
+  detectChronopostShop2ShopLabel,
   detectColissimoSplit,
   detectPdfFormat,
   preparePdfForPrint,
@@ -21,6 +22,119 @@ import { carrierStrategies } from "../dist/preparation/carrier.strategies.js";
 
 const require = createRequire(import.meta.url);
 const millimetersToPoints = (millimeters) => (millimeters * 72) / 25.4;
+
+async function createAnonymizedShop2ShopPdf(pdfPath) {
+  const document = await PDFDocument.create();
+  const page = document.addPage([595, 842]);
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  page.drawText("Chronopost Shop2Shop", { x: 58, y: 761, size: 14, font });
+  page.drawText("FICHE DESTINATAIRE", { x: 380, y: 797, size: 12, font });
+  page.drawText("POINTS DE PROXIMITE", { x: 346, y: 678, size: 12, font });
+
+  page.drawText("FR-CHR-1234-TEST", {
+    x: 221,
+    y: 287,
+    size: 20,
+    font,
+    rotate: degrees(270),
+  });
+  page.drawText("XW123456789TEST", {
+    x: 277,
+    y: 278,
+    size: 9,
+    font,
+    rotate: degrees(270),
+  });
+  page.drawText("DESTINATAIRE TEST - 12 RUE ANONYME", {
+    x: 430,
+    y: 320,
+    size: 8,
+    font,
+    rotate: degrees(270),
+  });
+  page.drawText("Reference : REF-ANONYME", {
+    x: 325,
+    y: 245,
+    size: 9,
+    font,
+    rotate: degrees(270),
+  });
+
+  for (let index = 0, x = 80; x < 190; index += 1) {
+    const width = index % 3 === 0 ? 3 : 1.5;
+    page.drawRectangle({
+      x,
+      y: 75,
+      width,
+      height: 82,
+      color: rgb(0, 0, 0),
+    });
+    x += width + 2;
+  }
+  for (let row = 0; row < 17; row += 1) {
+    for (let column = 0; column < 17; column += 1) {
+      if ((row * 7 + column * 11 + row * column) % 3 !== 0) {
+        page.drawRectangle({
+          x: 260 + column * 4,
+          y: 65 + row * 4,
+          width: 3,
+          height: 3,
+          color: rgb(0, 0, 0),
+        });
+      }
+    }
+  }
+
+  await writeFile(pdfPath, await document.save());
+}
+
+async function assertShop2ShopThermalPdf(
+  pdfPath,
+  previewPath,
+  requiredText = ["FR-CHR-1234-TEST", "XW123456789TEST", "DESTINATAIRE TEST"],
+) {
+  const outputDocument = await PDFDocument.load(await readFile(pdfPath));
+  const outputPage = outputDocument.getPage(0);
+  assert.ok(Math.abs(outputPage.getWidth() - millimetersToPoints(100)) < 0.1);
+  assert.ok(Math.abs(outputPage.getHeight() - millimetersToPoints(150)) < 0.1);
+
+  const pdfjsRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
+  const renderedDocument = await getDocument({
+    data: new Uint8Array(await readFile(pdfPath)),
+    standardFontDataUrl: `${path.join(pdfjsRoot, "standard_fonts")}${path.sep}`,
+  }).promise;
+  try {
+    const page = await renderedDocument.getPage(1);
+    const content = await page.getTextContent();
+    const strings = content.items.filter((item) => "str" in item).map((item) => item.str);
+    for (const expected of requiredText) {
+      assert.ok(strings.some((text) => text.includes(expected)), `extracted label retains ${expected}`);
+    }
+    assert.ok(!strings.some((text) => text.includes("FICHE DESTINATAIRE")));
+    assert.ok(!strings.some((text) => text.includes("POINTS DE PROXIMITE")));
+
+    const viewport = page.getViewport({
+      scale: 800 / page.getViewport({ scale: 1 }).width,
+    });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const context = canvas.getContext("2d");
+    await page.render({ canvasContext: context, viewport }).promise;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let darkPixels = 0;
+    for (let y = 150; y < 1050; y += 1) {
+      for (let x = 35; x < 765; x += 1) {
+        const offset = (y * canvas.width + x) * 4;
+        if (pixels[offset] < 80 && pixels[offset + 1] < 80 && pixels[offset + 2] < 80) {
+          darkPixels += 1;
+        }
+      }
+    }
+    assert.ok(darkPixels > 2000, "the extracted barcode, QR code, and text remain visible");
+    if (previewPath) await writeFile(previewPath, canvas.toBuffer("image/png"));
+  } finally {
+    await renderedDocument.destroy();
+  }
+}
 
 async function createImageOnlyColissimoPdf(pdfPath) {
   const canvas = createCanvas(1200, 847);
@@ -211,6 +325,114 @@ test("100 x 150 mm PDFs remain compatible without adaptation", async () => {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
 });
+
+test("anonymized Chronopost Shop2Shop labels are cropped and rotated for thermal printing", async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "bv-shop2shop-test-"));
+  const pdfPath = path.join(temporaryDirectory, "shop2shop-anonymized.pdf");
+  let preparedPath;
+  await createAnonymizedShop2ShopPdf(pdfPath);
+  try {
+    const preparation = await preparePdfForPrint(pdfPath);
+    preparedPath = preparation.preparedPath;
+    assert.equal(preparation.carrier, "CHRONOPOST");
+    assert.equal(preparation.format, "A4");
+    assert.equal(preparation.adaptation, "LABEL_EXTRACTED");
+    assert.equal(preparation.compatiblePL80E, true);
+    assert.notEqual(preparation.preparedPath, pdfPath);
+    await assertShop2ShopThermalPdf(preparedPath);
+  } finally {
+    if (preparedPath && preparedPath !== pdfPath) await rm(preparedPath, { force: true });
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("Chronopost Shop2Shop detection rejects classic and unknown A4 documents", async () => {
+  const shop2ShopContext = {
+    width: 595,
+    height: 842,
+    rotation: 0,
+    text: "CHRONOPOST SHOP2SHOP FR-CHR-1234-TEST XW123456789TEST",
+    textPositions: [
+      { text: "Shop2Shop", x: 58, y: 761 },
+      { text: "FR-CHR-1234-TEST", x: 221, y: 287 },
+      { text: "XW123456789TEST", x: 277, y: 278 },
+    ],
+  };
+  assert.ok(detectChronopostShop2ShopLabel(shop2ShopContext));
+  assert.equal(
+    detectChronopostShop2ShopLabel({
+      ...shop2ShopContext,
+      textPositions: shop2ShopContext.textPositions.filter(
+        (position) => !position.text.includes("Shop2Shop"),
+      ),
+    }),
+    undefined,
+    "classic Chronopost labels without a Shop2Shop heading are not cropped",
+  );
+  assert.equal(
+    detectChronopostShop2ShopLabel({
+      ...shop2ShopContext,
+      textPositions: shop2ShopContext.textPositions.filter(
+        (position) => !position.text.startsWith("FR-CHR"),
+      ),
+    }),
+    undefined,
+    "an A4 document without the V-Chronopost service reference is not cropped",
+  );
+  assert.equal(
+    detectChronopostShop2ShopLabel({ ...shop2ShopContext, rotation: 90 }),
+    undefined,
+    "rotated pages are not cropped by the portrait-specific detector",
+  );
+});
+
+test("classic Chronopost A4 labels retain the existing preparation path", async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "bv-chronopost-classic-test-"));
+  const pdfPath = path.join(temporaryDirectory, "chronopost-classic.pdf");
+  const document = await PDFDocument.create();
+  const page = document.addPage([595, 842]);
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  page.drawText("CHRONOPOST", { x: 58, y: 700, size: 18, font });
+  page.drawText("CLASSIC DESTINATAIRE", { x: 58, y: 660, size: 12, font });
+  await writeFile(pdfPath, await document.save());
+  let preparedPath;
+  try {
+    const preparation = await preparePdfForPrint(pdfPath);
+    preparedPath = preparation.preparedPath;
+    assert.equal(preparation.carrier, "CHRONOPOST");
+    assert.equal(preparation.adaptation, "LABEL_EXTRACTED");
+    assert.notEqual(preparation.preparedPath, pdfPath);
+    const preparedDocument = await PDFDocument.load(await readFile(preparedPath));
+    assert.ok(Math.abs(preparedDocument.getPage(0).getWidth() - millimetersToPoints(100)) < 0.1);
+    assert.ok(Math.abs(preparedDocument.getPage(0).getHeight() - millimetersToPoints(150)) < 0.1);
+  } finally {
+    if (preparedPath && preparedPath !== pdfPath) await rm(preparedPath, { force: true });
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test(
+  "the real Chronopost Shop2Shop PDF is extracted and rendered for review",
+  { skip: !process.env.BV_CHRONOPOST_SHOP2SHOP_PDF },
+  async () => {
+    const pdfPath = process.env.BV_CHRONOPOST_SHOP2SHOP_PDF;
+    let preparedPath;
+    try {
+      const preparation = await preparePdfForPrint(pdfPath);
+      preparedPath = preparation.preparedPath;
+      assert.equal(preparation.carrier, "CHRONOPOST");
+      assert.equal(preparation.format, "A4");
+      assert.equal(preparation.adaptation, "LABEL_EXTRACTED");
+      await assertShop2ShopThermalPdf(
+        preparedPath,
+        process.env.BV_CHRONOPOST_SHOP2SHOP_PREVIEW,
+        ["FR-CHR-", "XW"],
+      );
+    } finally {
+      if (preparedPath && preparedPath !== pdfPath) await rm(preparedPath, { force: true });
+    }
+  },
+);
 
 test("split Colissimo PDFs produce a portrait thermal PDF containing only the left label", async () => {
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "bv-colissimo-test-"));

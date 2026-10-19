@@ -11,6 +11,7 @@ Relay public HTTP/WebSocket sans stockage durable. Les PDF restent uniquement en
 - aucun contenu PDF n’est journalisé ;
 - HTTPS/WSS obligatoire en production, y compris derrière le proxy Railway ;
 - magasin inconnu ou application Windows hors ligne : page d’erreur explicite, sans conservation du PDF.
+- le portail React public utilise le jeton d’upload temporaire du Relay ; aucun secret magasin n’est inclus dans le bundle web.
 
 ## Déploiement Railway depuis GitHub
 
@@ -19,10 +20,12 @@ Relay public HTTP/WebSocket sans stockage durable. Les PDF restent uniquement en
 3. Conserver la racine du service à `/`. Le workspace pnpm, le lockfile et `railway.json` sont à la racine du monorepo. Ne pas choisir `packages/cloud-relay` comme Root Directory.
 4. Dans **Service → Settings → Config as Code**, vérifier que le chemin détecté est `/railway.json`.
 5. La configuration fournit automatiquement :
-   - build : `pnpm install --frozen-lockfile && pnpm --filter @bv/cloud-relay build` ;
+   - build : `pnpm install --frozen-lockfile && pnpm --filter @bv/web... build && pnpm --filter @bv/cloud-relay build` ;
    - start : `pnpm --filter @bv/cloud-relay start` ;
    - healthcheck : `/health`.
-6. Dans **Variables**, créer les quatre variables suivantes :
+     Le build web produit `apps/web/dist`, servi par le Relay. L’URL magasin existante (`/<STORE_ID>`) affiche le portail React ; les routes `/health`, `/api/jobs/<STORE_ID>` et `/ws` restent celles du Relay. Les nouveaux assets versionnés sont servis séparément du formulaire et ne contiennent ni PDF ni secrets magasin.
+6. Vérifier les chemins de veille Railway : `/apps/web/**`, `/packages/cloud-relay/**`, `/packages/shared/**`, `/packages/ui/**` ainsi que les fichiers de workspace et de lockfile.
+7. Dans **Variables**, créer les quatre variables suivantes :
 
 ```env
 NODE_ENV=production
@@ -39,9 +42,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 Ne pas définir `PORT` : Railway le fournit. Ne pas définir `CLOUD_RELAY_ALLOW_INSECURE` en production ; même défini par erreur, il n’autorise pas `ws://` lorsque `NODE_ENV=production`.
 
-7. Déclencher **Deploy** dans Railway. Depuis la CLI Railway liée au projet, la commande équivalente est `railway up`.
-8. Dans **Settings → Networking → Public Networking**, générer un domaine public Railway. Noter l’URL, par exemple `https://bv-cloud-relay-production.up.railway.app`.
-9. Vérifier publiquement :
+8. Déclencher **Deploy** dans Railway après validation des changements. Depuis la CLI Railway liée au projet, la commande équivalente est `railway up`.
+9. Dans **Settings → Networking → Public Networking**, générer un domaine public Railway. Noter l’URL, par exemple `https://bv-cloud-relay-production.up.railway.app`.
+10. Vérifier publiquement :
 
 ```text
 GET https://<domaine-railway>/health
@@ -93,4 +96,4 @@ CLOUD_RELAY_ALLOW_INSECURE=true
 RELAY_PORT=4444
 ```
 
-Lancer `pnpm --filter @bv/cloud-relay dev`, puis ouvrir `http://127.0.0.1:4444/demo-store` pendant que BV Expédition Pro est connecté.
+Lancer `pnpm --filter @bv/web... build`, puis `pnpm --filter @bv/cloud-relay dev`, puis ouvrir `http://127.0.0.1:4444/demo-store` pendant que BV Expédition Pro est connecté.

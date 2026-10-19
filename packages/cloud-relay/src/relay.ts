@@ -1,5 +1,8 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Server, IncomingMessage } from "node:http";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express, { type Express } from "express";
 import helmet from "helmet";
 import multer from "multer";
@@ -11,6 +14,10 @@ const UPLOAD_TOKEN_TTL_MS = 5 * 60 * 1000;
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_PER_IP = 10;
 const RATE_LIMIT_PER_STORE = 20;
+const webDistDirectory = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../apps/web/dist",
+);
 
 interface StoredJob {
   id: string;
@@ -58,6 +65,7 @@ export function createRelayServer(options: RelayOptions): RelayServer {
   app.set("trust proxy", 1);
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(express.urlencoded({ extended: false }));
+  app.use(express.static(webDistDirectory, { dotfiles: "deny", fallthrough: true, index: false }));
   app.get("/health", (_request, response) =>
     response.json({ name: "BV Cloud Relay", status: "ok" }),
   );
@@ -86,6 +94,26 @@ export function createRelayServer(options: RelayOptions): RelayServer {
   function errorPage(title: string, message: string) {
     return `<!doctype html><html lang="fr"><meta name="viewport" content="width=device-width"><title>${title}</title><body style="font:18px system-ui;background:#f3f6fa;color:#123;display:grid;place-items:center;min-height:100vh;margin:0"><main style="background:white;padding:2rem;border-radius:16px;max-width:460px"><h1>${title}</h1><p>${message}</p></main></body></html>`;
   }
+  function clientError(
+    request: express.Request,
+    response: express.Response,
+    status: number,
+    message: string,
+  ) {
+    if (wantsJson(request)) {
+      response.status(status).json({ message });
+      return;
+    }
+    response.status(status).type("html").send(errorPage("Envoi impossible", message));
+  }
+  function wantsJson(request: express.Request) {
+    return (
+      request
+        .get("accept")
+        ?.split(",")
+        .some((acceptedType) => acceptedType.trim().split(";")[0] === "application/json") ?? false
+    );
+  }
   function rateAllowed(key: string, maximum: number) {
     const now = Date.now();
     const bucket = rateBuckets.get(key);
@@ -109,7 +137,7 @@ export function createRelayServer(options: RelayOptions): RelayServer {
     );
   }
 
-  app.get("/:storeId", (request, response) => {
+  app.get("/:storeId", async (request, response, next) => {
     const storeId = Array.isArray(request.params.storeId)
       ? (request.params.storeId[0] ?? "")
       : request.params.storeId;
@@ -129,11 +157,20 @@ export function createRelayServer(options: RelayOptions): RelayServer {
           ),
         );
     const uploadToken = issueToken(storeId);
-    response
-      .type("html")
-      .send(
-        `<!doctype html><html lang="fr"><meta name="viewport" content="width=device-width"><title>BV Expédition</title><style>body{font:16px system-ui;background:#f3f6fa;color:#123;display:grid;place-items:center;min-height:100vh;margin:0}main{background:white;padding:2rem;border-radius:16px;max-width:460px;box-shadow:0 8px 30px #1232}button{background:#ffd400;border:0;padding:1rem;width:100%;font-weight:800;border-radius:8px}input{margin:1.5rem 0;width:100%}</style><main><h1>Imprimez votre bordereau</h1><p>PDF uniquement, 10 Mo maximum.</p><form method="post" action="/api/jobs/${encodeURIComponent(storeId)}" enctype="multipart/form-data"><input type="hidden" name="token" value="${uploadToken}"><input required type="file" name="file" accept="application/pdf"><button>Envoyer à l’imprimante</button></form></main></html>`,
-      );
+    try {
+      const indexHtml = await readFile(path.join(webDistDirectory, "index.html"), "utf8");
+      const bootstrap = `<script>window.bvCloudPortal=${JSON.stringify({
+        storeId,
+        uploadToken,
+      }).replaceAll("<", "\\u003c")};</script>`;
+      response
+        .set("Cache-Control", "no-store, private")
+        .type("html")
+        .send(indexHtml.replace("</head>", `${bootstrap}</head>`));
+    } catch (error) {
+      uploadTokens.delete(uploadToken);
+      next(error);
+    }
   });
   app.post(
     "/api/jobs/:storeId",
@@ -145,10 +182,12 @@ export function createRelayServer(options: RelayOptions): RelayServer {
         !rateAllowed(`ip:${request.ip}`, RATE_LIMIT_PER_IP) ||
         !rateAllowed(`store:${storeId}`, RATE_LIMIT_PER_STORE)
       ) {
-        response
-          .status(429)
-          .type("html")
-          .send(errorPage("Trop de demandes", "Veuillez patienter une minute avant de réessayer."));
+        clientError(
+          request,
+          response,
+          429,
+          "Trop de demandes. Veuillez patienter une minute avant de réessayer.",
+        );
         return;
       }
       next();
@@ -159,28 +198,30 @@ export function createRelayServer(options: RelayOptions): RelayServer {
         ? (request.params.storeId[0] ?? "")
         : request.params.storeId;
       if (!options.stores[storeId] || !validToken(storeId, String(request.body.token ?? ""))) {
-        response.status(401).send("Session invalide ou expirée.");
+        clientError(
+          request,
+          response,
+          401,
+          "Cette session a expiré. Rechargez le QR code et sélectionnez à nouveau votre PDF.",
+        );
         return;
       }
       uploadTokens.delete(String(request.body.token ?? ""));
       if (sockets.get(storeId)?.readyState !== WebSocket.OPEN) {
-        response
-          .status(503)
-          .type("html")
-          .send(
-            errorPage(
-              "Magasin hors ligne",
-              "Le PDF n’a pas été conservé. Réessayez lorsque le magasin sera connecté.",
-            ),
-          );
+        clientError(
+          request,
+          response,
+          503,
+          "Le magasin est hors ligne. Le PDF n’a pas été conservé.",
+        );
         return;
       }
       if (!request.file) {
-        response.status(400).send("Un PDF est requis.");
+        clientError(request, response, 400, "Un fichier PDF est requis.");
         return;
       }
       if (request.file.buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
-        response.status(415).send("Le fichier transmis n’est pas un PDF valide.");
+        clientError(request, response, 415, "Le fichier transmis n’est pas un PDF valide.");
         return;
       }
       const job: StoredJob = {
@@ -192,25 +233,31 @@ export function createRelayServer(options: RelayOptions): RelayServer {
       };
       jobs.set(job.id, job);
       push(job);
-      response
-        .status(202)
-        .send(
-          "<!doctype html><html lang=fr><meta name=viewport content='width=device-width'><body style='font:18px system-ui;text-align:center;padding:3rem'><h1>PDF envoyé ✓</h1><p>Le magasin a reçu votre demande.</p></body></html>",
-        );
+      if (wantsJson(request)) {
+        response.status(202).json({ id: job.id, status: "PENDING" });
+      } else {
+        response
+          .status(202)
+          .send(
+            "<!doctype html><html lang=fr><meta name=viewport content='width=device-width'><body style='font:18px system-ui;text-align:center;padding:3rem'><h1>PDF envoyé ✓</h1><p>Le magasin a reçu votre demande.</p></body></html>",
+          );
+      }
     },
   );
   app.use(
     (
       error: unknown,
-      _request: express.Request,
+      request: express.Request,
       response: express.Response,
       next: express.NextFunction,
     ) => {
       if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
-        response
-          .status(413)
-          .type("html")
-          .send(errorPage("PDF trop volumineux", "La taille maximale autorisée est de 10 Mo."));
+        clientError(
+          request,
+          response,
+          413,
+          "PDF trop volumineux. La taille maximale autorisée est de 10 Mo.",
+        );
         return;
       }
       next(error);

@@ -18,6 +18,7 @@ const POINTS_PER_MM = 72 / 25.4;
 const TARGET_WIDTH = 100 * POINTS_PER_MM;
 const TARGET_HEIGHT = 150 * POINTS_PER_MM;
 const COLISSIMO_IMAGE_WIDTH = 1200;
+const CHRONOPOST_SHOP2SHOP_CROP = { left: 18, bottom: 8, right: 535, top: 340 } as const;
 const require = createRequire(import.meta.url);
 const standardFontDataUrl = `${path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "standard_fonts")}${path.sep}`;
 
@@ -139,6 +140,47 @@ export function detectColissimoSplit(context: PdfAnalysisContext): number | unde
   );
 
   return leftAnchorIsLeft && proofIsRight ? splitX : undefined;
+}
+
+export function detectChronopostShop2ShopLabel(context: PdfAnalysisContext) {
+  if (
+    context.rotation !== 0 ||
+    Math.abs(context.width - 595) > 3 ||
+    Math.abs(context.height - 842) > 3
+  ) {
+    return undefined;
+  }
+
+  const positions = context.textPositions.map((position) => ({
+    ...position,
+    normalizedText: normalizePdfText(position.text),
+  }));
+  const hasShop2ShopHeading = positions.some(
+    (position) =>
+      position.y > context.height * 0.82 &&
+      position.x < context.width * 0.3 &&
+      position.normalizedText.includes("SHOP2SHOP"),
+  );
+  const hasChronopostServiceReference = positions.some(
+    (position) =>
+      position.y > context.height * 0.25 &&
+      position.y < context.height * 0.45 &&
+      position.x > context.width * 0.25 &&
+      position.x < context.width * 0.55 &&
+      /^FR[- ]?CHR[- ]\d{3,}/.test(position.normalizedText),
+  );
+  const hasRotatedTrackingNumber = positions.some(
+    (position) =>
+      position.y > context.height * 0.25 &&
+      position.y < context.height * 0.45 &&
+      position.x > context.width * 0.35 &&
+      position.x < context.width * 0.6 &&
+      /^XW[A-Z0-9]{8,}$/.test(position.normalizedText),
+  );
+
+  return hasShop2ShopHeading && hasChronopostServiceReference && hasRotatedTrackingNumber
+    ? CHRONOPOST_SHOP2SHOP_CROP
+    : undefined;
 }
 
 function findVerticalBorder(
@@ -330,6 +372,26 @@ async function createColissimoSplitPdf(source: PDFDocument, splitX: number, rota
   return output.save();
 }
 
+async function createChronopostShop2ShopPdf(source: PDFDocument) {
+  const sourcePage = source.getPage(0);
+  const output = await PDFDocument.create();
+  const embedded = await output.embedPage(sourcePage, CHRONOPOST_SHOP2SHOP_CROP);
+  const page = output.addPage([TARGET_WIDTH, TARGET_HEIGHT]);
+  const scale = Math.min(TARGET_HEIGHT / embedded.width, TARGET_WIDTH / embedded.height);
+  const drawnWidth = embedded.width * scale;
+  const drawnHeight = embedded.height * scale;
+
+  page.drawPage(embedded, {
+    x: (TARGET_WIDTH + drawnHeight) / 2,
+    y: (TARGET_HEIGHT - drawnWidth) / 2,
+    width: drawnWidth,
+    height: drawnHeight,
+    rotate: degrees(90),
+  });
+
+  return output.save();
+}
+
 async function createLabelPdf(source: PDFDocument, context: PdfAnalysisContext, cropA4: boolean) {
   const output = await PDFDocument.create();
   const sourcePage = source.getPage(0);
@@ -410,6 +472,25 @@ export async function preparePdfForPrint(filePath: string): Promise<PdfPreparati
       originalPath: filePath,
       preparedPath,
       carrier,
+      format,
+      adaptation: "LABEL_EXTRACTED",
+      adapted: true,
+      compatiblePL80E: true,
+    };
+  }
+
+  if (detectChronopostShop2ShopLabel(context)) {
+    const source = await PDFDocument.load(input);
+    const preparedBytes = await createChronopostShop2ShopPdf(source);
+    const preparedPath = path.join(
+      os.tmpdir(),
+      `bv-pl80e-chronopost-shop2shop-${randomUUID()}.pdf`,
+    );
+    await writeFile(preparedPath, preparedBytes);
+    return {
+      originalPath: filePath,
+      preparedPath,
+      carrier: "CHRONOPOST",
       format,
       adaptation: "LABEL_EXTRACTED",
       adapted: true,
