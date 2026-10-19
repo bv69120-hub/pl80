@@ -10,6 +10,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { NewLabelPage } from "./pages/NewLabelPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ClientPrintPage } from "./pages/ClientPrintPage";
+import { LabelTestCenterPage } from "./pages/LabelTestCenterPage";
 
 export function App() {
   return (
@@ -24,6 +25,7 @@ export function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="/label-test-center" element={<LabelTestCenterPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/new-label" element={<NewLabelPage />} />
               <Route path="/history" element={<HistoryPage />} />

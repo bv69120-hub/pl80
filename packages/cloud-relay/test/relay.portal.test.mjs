@@ -82,6 +82,23 @@ test("the current store QR URL serves the React portal and static frontend asset
   });
 });
 
+test("the public Cloud Relay does not expose the admin label-test API", async () => {
+  await withRelay(async ({ baseUrl, connectStore }) => {
+    await connectStore();
+    const page = await getPortal(baseUrl);
+    const token = tokenFromPage(await page.text());
+
+    const analysis = await globalThis.fetch(`${baseUrl}/api/label-tests/analyze`, {
+      method: "POST",
+      body: pdfForm(token),
+    });
+    assert.equal(analysis.status, 404);
+
+    const preview = await globalThis.fetch(`${baseUrl}/api/label-tests/private-run/original`);
+    assert.equal(preview.status, 404);
+  });
+});
+
 test("Cloud uploads retain single-use tokens and relay jobs without reporting a physical print", async () => {
   await withRelay(async ({ baseUrl, connectStore }) => {
     const socket = await connectStore();

@@ -1,6 +1,4 @@
-import prismaClientPackage from "@prisma/client";
-
-const { PrismaClient } = prismaClientPackage;
+import { PrismaClient } from "@prisma/client";
 
 export const databaseConfig = {
   provider: "sqlite",
@@ -11,4 +9,4 @@ export type DatabaseConfig = typeof databaseConfig;
 
 export type UserRole = "ADMIN" | "EMPLOYE";
 
-export const prisma = new PrismaClient();
+export const prisma: PrismaClient = new PrismaClient();

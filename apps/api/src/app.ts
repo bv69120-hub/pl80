@@ -8,6 +8,7 @@ import { printJobsRouter } from "./print-jobs/print.jobs.routes.js";
 import { clientPrintRouter } from "./print-jobs/client.print.routes.js";
 import { clientModeSettingsRouter } from "./settings/client.mode.routes.js";
 import { cloudRouter } from "./cloud/cloud.routes.js";
+import { labelTestCenterRouter } from "./label-test-center/label-test.routes.js";
 
 const electronLocalCorsOptions: CorsOptions = {
   origin(origin, callback) {
@@ -45,6 +46,7 @@ export function createApp(): Express {
   app.use("/api/client-print", clientPrintRouter);
   app.use("/api/settings/client-mode", clientModeSettingsRouter);
   app.use("/api/cloud", cloudRouter);
+  app.use("/api/label-tests", labelTestCenterRouter);
 
   app.get("/health", (_request, response) => {
     response.json({

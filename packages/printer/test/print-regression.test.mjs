@@ -16,6 +16,7 @@ import {
   detectChronopostShop2ShopLabel,
   detectColissimoSplit,
   detectPdfFormat,
+  detectVintedMondialRelayTopLabel,
   preparePdfForPrint,
 } from "../dist/preparation/pdf.preparation.js";
 import { carrierStrategies } from "../dist/preparation/carrier.strategies.js";
@@ -88,6 +89,76 @@ async function createAnonymizedShop2ShopPdf(pdfPath) {
   await writeFile(pdfPath, await document.save());
 }
 
+async function createSyntheticVintedMondialRelayPdf(pdfPath, { includeSeparator = true } = {}) {
+  const document = await PDFDocument.create();
+  const page = document.addPage([595, 842]);
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  page.drawText("VINTED", { x: 36, y: 805, size: 16, font });
+  page.drawText("MONDIAL RELAY", { x: 36, y: 780, size: 12, font });
+  page.drawText("EXPEDITEUR", { x: 36, y: 742, size: 11, font });
+  page.drawText("EXPEDITEUR TEST - 10 RUE EXEMPLE", { x: 36, y: 718, size: 9, font });
+  page.drawText("DESTINATAIRE", { x: 330, y: 742, size: 11, font });
+  page.drawText("DESTINATAIRE TEST - 20 RUE FICTIVE", { x: 330, y: 718, size: 9, font });
+  page.drawText("POINT RELAIS - HUB 42", { x: 330, y: 680, size: 10, font });
+  page.drawText("ROUTAGE MR42 TEST", { x: 330, y: 656, size: 9, font });
+
+  for (let index = 0, x = 326; x < 558; index += 1) {
+    const barWidth = index % 5 === 0 ? 2.6 : index % 2 === 0 ? 1.1 : 1.7;
+    page.drawRectangle({
+      x,
+      y: 480,
+      width: barWidth,
+      height: 112,
+      color: rgb(0, 0, 0),
+    });
+    x += barWidth + (index % 3 === 0 ? 2.1 : 1.4);
+  }
+  if (includeSeparator) {
+    page.drawLine({
+      start: { x: 14, y: 430 },
+      end: { x: 581, y: 430 },
+      thickness: 1.5,
+      color: rgb(0, 0, 0),
+    });
+  }
+  page.drawRectangle({
+    x: 22,
+    y: 90,
+    width: 520,
+    height: 80,
+    color: rgb(0.9, 0.15, 0.15),
+  });
+  page.drawText("FICHE DESTINATAIRE", { x: 36, y: 300, size: 13, font });
+  page.drawText("DESTINATAIRE TEST - VOLET A CONSERVER", {
+    x: 36,
+    y: 274,
+    size: 9,
+    font,
+  });
+  await writeFile(pdfPath, await document.save());
+}
+
+async function renderPdfPreview(pdfBytes, widthPixels) {
+  const pdfjsRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
+  const document = await getDocument({
+    data: new Uint8Array(pdfBytes),
+    standardFontDataUrl: `${path.join(pdfjsRoot, "standard_fonts")}${path.sep}`,
+  }).promise;
+  try {
+    const page = await document.getPage(1);
+    const viewport = page.getViewport({
+      scale: widthPixels / page.getViewport({ scale: 1 }).width,
+    });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    const content = await page.getTextContent();
+    const text = content.items.filter((item) => "str" in item).map((item) => item.str);
+    return { png: canvas.toBuffer("image/png"), canvas, text };
+  } finally {
+    await document.destroy();
+  }
+}
+
 async function assertShop2ShopThermalPdf(
   pdfPath,
   previewPath,
@@ -108,7 +179,10 @@ async function assertShop2ShopThermalPdf(
     const content = await page.getTextContent();
     const strings = content.items.filter((item) => "str" in item).map((item) => item.str);
     for (const expected of requiredText) {
-      assert.ok(strings.some((text) => text.includes(expected)), `extracted label retains ${expected}`);
+      assert.ok(
+        strings.some((text) => text.includes(expected)),
+        `extracted label retains ${expected}`,
+      );
     }
     assert.ok(!strings.some((text) => text.includes("FICHE DESTINATAIRE")));
     assert.ok(!strings.some((text) => text.includes("POINTS DE PROXIMITE")));
@@ -423,16 +497,194 @@ test(
       assert.equal(preparation.carrier, "CHRONOPOST");
       assert.equal(preparation.format, "A4");
       assert.equal(preparation.adaptation, "LABEL_EXTRACTED");
-      await assertShop2ShopThermalPdf(
-        preparedPath,
-        process.env.BV_CHRONOPOST_SHOP2SHOP_PREVIEW,
-        ["FR-CHR-", "XW"],
-      );
+      await assertShop2ShopThermalPdf(preparedPath, process.env.BV_CHRONOPOST_SHOP2SHOP_PREVIEW, [
+        "FR-CHR-",
+        "XW",
+      ]);
     } finally {
       if (preparedPath && preparedPath !== pdfPath) await rm(preparedPath, { force: true });
     }
   },
 );
+
+test("Vinted Mondial Relay extracts the full-width upper label without its lower form", async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "bv-vinted-mondial-relay-test-"));
+  const pdfPath = path.join(temporaryDirectory, "synthetic-vinted-mondial-relay.pdf");
+  const previewDirectory = process.env.BV_VINTED_MR_PREVIEW_DIR;
+  let preparedPath;
+  await createSyntheticVintedMondialRelayPdf(pdfPath);
+
+  try {
+    const sourceBytes = new Uint8Array(await readFile(pdfPath));
+    const pdfjsRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
+    const sourceDocument = await getDocument({
+      data: new Uint8Array(sourceBytes),
+      standardFontDataUrl: `${path.join(pdfjsRoot, "standard_fonts")}${path.sep}`,
+    }).promise;
+    let context;
+    try {
+      const sourcePage = await sourceDocument.getPage(1);
+      const textContent = await sourcePage.getTextContent();
+      const textPositions = textContent.items.flatMap((item) => {
+        if (!("str" in item) || !item.str.trim()) return [];
+        return [{ text: item.str, x: item.transform[4], y: item.transform[5] }];
+      });
+      context = {
+        width: 595,
+        height: 842,
+        rotation: sourcePage.rotate,
+        text: textPositions.map((position) => position.text).join(" "),
+        textPositions,
+      };
+    } finally {
+      await sourceDocument.destroy();
+    }
+
+    const labelBottom = await detectVintedMondialRelayTopLabel(sourceBytes, context);
+    assert.ok(labelBottom !== undefined, "the two-panel shipping layout is recognized");
+    assert.ok(labelBottom > 400 && labelBottom < 460, "the crop ends at the upper-label divider");
+
+    const intermediateDocument = await PDFDocument.create();
+    const originalDocument = await PDFDocument.load(sourceBytes);
+    const originalPage = originalDocument.getPage(0);
+    const extractedPage = await intermediateDocument.embedPage(originalPage, {
+      left: 0,
+      bottom: labelBottom,
+      right: 595,
+      top: 842,
+    });
+    const previewPage = intermediateDocument.addPage([595, 842 - labelBottom]);
+    previewPage.drawPage(extractedPage, { x: 0, y: 0 });
+    const intermediateBytes = await intermediateDocument.save();
+
+    const preparation = await preparePdfForPrint(pdfPath);
+    preparedPath = preparation.preparedPath;
+    assert.equal(preparation.carrier, "VINTED");
+    assert.equal(preparation.adaptation, "LABEL_EXTRACTED");
+    assert.equal(preparation.compatiblePL80E, true);
+    assert.notEqual(preparedPath, pdfPath);
+
+    const outputDocument = await PDFDocument.load(await readFile(preparedPath));
+    const outputPage = outputDocument.getPage(0);
+    assert.ok(Math.abs(outputPage.getWidth() - millimetersToPoints(100)) < 0.1);
+    assert.ok(Math.abs(outputPage.getHeight() - millimetersToPoints(150)) < 0.1);
+
+    const originalPreview = await renderPdfPreview(sourceBytes, 700);
+    const extractedPreview = await renderPdfPreview(intermediateBytes, 700);
+    const thermalPreview = await renderPdfPreview(await readFile(preparedPath), 800);
+    for (const requiredText of [
+      "EXPEDITEUR TEST",
+      "DESTINATAIRE TEST",
+      "POINT RELAIS",
+      "ROUTAGE MR42",
+    ]) {
+      assert.ok(
+        thermalPreview.text.some((text) => text.includes(requiredText)),
+        `thermal output retains ${requiredText}`,
+      );
+    }
+    assert.ok(
+      originalPreview.text.some((text) => text.includes("FICHE DESTINATAIRE")),
+      "the original contains the lower recipient sheet",
+    );
+    assert.ok(
+      extractedPreview.text.some((text) => text.includes("ROUTAGE MR42")),
+      "the intermediate crop includes the right-hand routing information",
+    );
+    const pixels = thermalPreview.canvas
+      .getContext("2d")
+      .getImageData(0, 0, thermalPreview.canvas.width, thermalPreview.canvas.height).data;
+    const countRedPixels = (preview) => {
+      const data = preview.canvas
+        .getContext("2d")
+        .getImageData(0, 0, preview.canvas.width, preview.canvas.height).data;
+      let count = 0;
+      for (let offset = 0; offset < data.length; offset += 4) {
+        if (data[offset] > 150 && data[offset + 1] < 100 && data[offset + 2] < 100) count += 1;
+      }
+      return count;
+    };
+    assert.ok(countRedPixels(originalPreview) > 1000, "original preview shows lower-sheet marker");
+    assert.equal(countRedPixels(extractedPreview), 0, "the extracted zone omits the lower sheet");
+    assert.equal(countRedPixels(thermalPreview), 0, "the final thermal page omits the lower sheet");
+
+    const isDark = (x, y) => {
+      const offset = (y * thermalPreview.canvas.width + x) * 4;
+      return pixels[offset] < 80 && pixels[offset + 1] < 80 && pixels[offset + 2] < 80;
+    };
+    let barcodeRows = 0;
+    const barcodeStartX = Math.round(thermalPreview.canvas.width * 0.5);
+    const barcodeEndX = Math.round(thermalPreview.canvas.width * 0.97);
+    for (let y = 0; y < thermalPreview.canvas.height; y += 2) {
+      let transitions = 0;
+      let previous = isDark(barcodeStartX, y);
+      for (let x = barcodeStartX + 1; x < barcodeEndX; x += 1) {
+        const dark = isDark(x, y);
+        if (dark !== previous) transitions += 1;
+        previous = dark;
+      }
+      if (transitions >= 32) barcodeRows += 1;
+    }
+    assert.ok(barcodeRows >= 8, "the complete right-side barcode remains visible");
+
+    if (previewDirectory) {
+      await mkdir(previewDirectory, { recursive: true });
+      await writeFile(
+        path.join(previewDirectory, "vinted-mondial-relay-original.png"),
+        originalPreview.png,
+      );
+      await writeFile(
+        path.join(previewDirectory, "vinted-mondial-relay-extracted.png"),
+        extractedPreview.png,
+      );
+      await writeFile(
+        path.join(previewDirectory, "vinted-mondial-relay-thermal.png"),
+        thermalPreview.png,
+      );
+    }
+  } finally {
+    if (preparedPath && preparedPath !== pdfPath) await rm(preparedPath, { force: true });
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("Vinted/Mondial Relay crop rejects an A4 document without the label divider", async () => {
+  const temporaryDirectory = await mkdtemp(
+    path.join(os.tmpdir(), "bv-vinted-mondial-relay-negative-"),
+  );
+  const pdfPath = path.join(temporaryDirectory, "synthetic-without-divider.pdf");
+  await createSyntheticVintedMondialRelayPdf(pdfPath, { includeSeparator: false });
+  try {
+    const pdfjsRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
+    const document = await getDocument({
+      data: new Uint8Array(await readFile(pdfPath)),
+      standardFontDataUrl: `${path.join(pdfjsRoot, "standard_fonts")}${path.sep}`,
+    }).promise;
+    try {
+      const page = await document.getPage(1);
+      const textContent = await page.getTextContent();
+      const textPositions = textContent.items.flatMap((item) => {
+        if (!("str" in item) || !item.str.trim()) return [];
+        return [{ text: item.str, x: item.transform[4], y: item.transform[5] }];
+      });
+      const context = {
+        width: 595,
+        height: 842,
+        rotation: page.rotate,
+        text: textPositions.map((position) => position.text).join(" "),
+        textPositions,
+      };
+      assert.equal(
+        await detectVintedMondialRelayTopLabel(new Uint8Array(await readFile(pdfPath)), context),
+        undefined,
+      );
+    } finally {
+      await document.destroy();
+    }
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
 
 test("split Colissimo PDFs produce a portrait thermal PDF containing only the left label", async () => {
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "bv-colissimo-test-"));

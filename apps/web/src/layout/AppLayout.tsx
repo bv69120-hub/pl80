@@ -4,6 +4,7 @@ import LocalPrintshopOutlinedIcon from "@mui/icons-material/LocalPrintshopOutlin
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/Menu";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import {
   AppBar,
   Avatar,
@@ -32,6 +33,12 @@ const navigationItems = [
   { label: "Nouveau bordereau", path: "/new-label", icon: <LocalPrintshopOutlinedIcon /> },
   { label: "Historique", path: "/history", icon: <HistoryOutlinedIcon /> },
   { label: "Paramètres", path: "/settings", icon: <SettingsOutlinedIcon /> },
+  {
+    label: "Centre de test",
+    path: "/label-test-center",
+    icon: <ScienceOutlinedIcon />,
+    adminOnly: true,
+  },
 ];
 
 function Brand() {
@@ -110,6 +117,9 @@ function PrinterStatus({ compact = false }: { compact?: boolean }) {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { logout, user } = useAuth();
   const location = useLocation();
+  const visibleNavigationItems = navigationItems.filter(
+    (item) => !("adminOnly" in item) || !item.adminOnly || user?.role === "ADMIN",
+  );
   return (
     <Stack sx={{ height: "100%", bgcolor: "common.white" }}>
       <Brand />
@@ -121,7 +131,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         Navigation
       </Typography>
       <List sx={{ flex: 1, px: 1.5, py: 1 }}>
-        {navigationItems.map((item) => (
+        {visibleNavigationItems.map((item) => (
           <ListItemButton
             key={item.path}
             component={NavLink}

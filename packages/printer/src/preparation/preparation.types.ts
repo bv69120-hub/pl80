@@ -21,6 +21,26 @@ export interface PdfPreparationResult {
   adaptation: AdaptationKind;
   adapted: boolean;
   compatiblePL80E: boolean;
+  diagnostics?: PdfPreparationDiagnostics;
+}
+
+export interface PdfPreparationDiagnostics {
+  pageCount: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  sourceRotation: number;
+  strategy: string;
+  extractedRegion: {
+    left: number;
+    bottom: number;
+    right: number;
+    top: number;
+  };
+  extractedPath?: string;
+  targetWidth: number;
+  targetHeight: number;
+  proportionsPreserved: boolean;
+  warnings: string[];
 }
 
 export interface TextPosition {
@@ -35,6 +55,7 @@ export interface PdfAnalysisContext {
   width: number;
   height: number;
   rotation: number;
+  pageCount: number;
 }
 
 export interface CarrierStrategy {
