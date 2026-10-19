@@ -22,6 +22,84 @@ import { carrierStrategies } from "../dist/preparation/carrier.strategies.js";
 const require = createRequire(import.meta.url);
 const millimetersToPoints = (millimeters) => (millimeters * 72) / 25.4;
 
+async function createImageOnlyColissimoPdf(pdfPath) {
+  const canvas = createCanvas(1200, 847);
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = "#111111";
+  context.lineWidth = 4;
+  context.strokeRect(22, 47, 544, 760);
+  context.strokeRect(622, 47, 544, 760);
+  context.font = "30px sans-serif";
+  context.fillStyle = "#111111";
+  context.fillText("COLISSIMO", 250, 170);
+  context.font = "24px sans-serif";
+  context.fillText("DESTINATAIRE", 85, 260);
+  context.fillText("PREUVE DE DEPOT", 730, 250);
+
+  for (let index = 0, x = 100; x < 465; index += 1) {
+    const width = index % 4 === 0 ? 4 : index % 3 === 0 ? 3 : 2;
+    context.fillRect(x, 505, width, 96);
+    x += width + (index % 2 === 0 ? 2 : 3);
+  }
+
+  const document = await PDFDocument.create();
+  const page = document.addPage([670.26, 472.84]);
+  const embeddedImage = await document.embedPng(canvas.toBuffer("image/png"));
+  page.drawImage(embeddedImage, { x: 0, y: 0, width: 670.26, height: 472.84 });
+  await writeFile(pdfPath, await document.save());
+}
+
+async function assertThermalColissimoVisual(pdfPath) {
+  const outputDocument = await PDFDocument.load(await readFile(pdfPath));
+  const outputPage = outputDocument.getPage(0);
+  assert.ok(Math.abs(outputPage.getWidth() - millimetersToPoints(100)) < 0.1);
+  assert.ok(Math.abs(outputPage.getHeight() - millimetersToPoints(150)) < 0.1);
+
+  const pdfjsRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
+  const renderedDocument = await getDocument({
+    data: new Uint8Array(await readFile(pdfPath)),
+    standardFontDataUrl: `${path.join(pdfjsRoot, "standard_fonts")}${path.sep}`,
+  }).promise;
+  try {
+    const page = await renderedDocument.getPage(1);
+    const viewport = page.getViewport({
+      scale: 800 / page.getViewport({ scale: 1 }).width,
+    });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const context = canvas.getContext("2d");
+    await page.render({ canvasContext: context, viewport }).promise;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const isDark = (x, y) => {
+      const offset = (y * canvas.width + x) * 4;
+      return pixels[offset] < 80 && pixels[offset + 1] < 80 && pixels[offset + 2] < 80;
+    };
+    const barcodeRows = [];
+    for (let y = 600; y < 950; y += 8) {
+      let transitions = 0;
+      let previous = isDark(40, y);
+      for (let x = 41; x < 700; x += 1) {
+        const dark = isDark(x, y);
+        if (dark !== previous) transitions += 1;
+        previous = dark;
+      }
+      if (transitions >= 32) barcodeRows.push(y);
+    }
+    assert.ok(barcodeRows.length >= 5, "the extracted barcode remains visually readable");
+
+    let rightPanelInk = 0;
+    for (let y = 150; y < 1050; y += 1) {
+      for (let x = 680; x < 740; x += 1) {
+        if (isDark(x, y)) rightPanelInk += 1;
+      }
+    }
+    assert.ok(rightPanelInk < 2500, "the right-hand proof panel is excluded");
+  } finally {
+    await renderedDocument.destroy();
+  }
+}
+
 test("Windows is the default print mode", () => {
   const previous = process.env.PRINT_MODE;
   delete process.env.PRINT_MODE;
@@ -211,6 +289,75 @@ test("split Colissimo PDFs produce a portrait thermal PDF containing only the le
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
 });
+
+test("image-only Colissimo panels are detected and visually extracted", async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "bv-colissimo-image-test-"));
+  const pdfPath = path.join(temporaryDirectory, "colissimo-image-only.pdf");
+  let preparedPath;
+  await createImageOnlyColissimoPdf(pdfPath);
+  try {
+    const preparation = await preparePdfForPrint(pdfPath);
+    preparedPath = preparation.preparedPath;
+    assert.equal(preparation.carrier, "COLISSIMO");
+    assert.equal(preparation.adaptation, "LABEL_EXTRACTED");
+    assert.notEqual(preparation.preparedPath, pdfPath);
+    await assertThermalColissimoVisual(preparedPath);
+  } finally {
+    if (preparedPath && preparedPath !== pdfPath) await rm(preparedPath, { force: true });
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("unrecognized landscape PDFs are not cropped by the Colissimo image detector", async () => {
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "bv-landscape-test-"));
+  const pdfPath = path.join(temporaryDirectory, "unknown-landscape.pdf");
+  const document = await PDFDocument.create();
+  document.addPage([670.26, 472.84]);
+  await writeFile(pdfPath, await document.save());
+  try {
+    const preparation = await preparePdfForPrint(pdfPath);
+    assert.equal(preparation.carrier, "UNKNOWN");
+    assert.equal(preparation.preparedPath, pdfPath);
+    assert.equal(preparation.adaptation, "UNSUPPORTED");
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test(
+  "the real image-only Colissimo reference is visually extracted",
+  { skip: !process.env.BV_COLISSIMO_REFERENCE_PDF },
+  async () => {
+    const pdfPath = process.env.BV_COLISSIMO_REFERENCE_PDF;
+    let preparedPath;
+    try {
+      const pdfjsRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
+      const sourceDocument = await getDocument({
+        data: new Uint8Array(await readFile(pdfPath)),
+        standardFontDataUrl: `${path.join(pdfjsRoot, "standard_fonts")}${path.sep}`,
+      }).promise;
+      try {
+        const sourcePage = await sourceDocument.getPage(1);
+        const textContent = await sourcePage.getTextContent();
+        assert.equal(
+          textContent.items.filter((item) => "str" in item && item.str.trim()).length,
+          0,
+          "the real reference exercises image-only recognition",
+        );
+      } finally {
+        await sourceDocument.destroy();
+      }
+
+      const preparation = await preparePdfForPrint(pdfPath);
+      preparedPath = preparation.preparedPath;
+      assert.equal(preparation.carrier, "COLISSIMO");
+      assert.equal(preparation.adaptation, "LABEL_EXTRACTED");
+      await assertThermalColissimoVisual(preparedPath);
+    } finally {
+      if (preparedPath && preparedPath !== pdfPath) await rm(preparedPath, { force: true });
+    }
+  },
+);
 
 test("Colissimo split detection requires a left label, right receipt text and a central gutter", () => {
   const context = {

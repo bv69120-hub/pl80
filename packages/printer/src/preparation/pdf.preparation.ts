@@ -3,6 +3,7 @@ import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { createCanvas } from "canvas";
 import { degrees, PDFDocument } from "pdf-lib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { detectCarrier, normalizePdfText } from "./carrier.strategies.js";
@@ -16,6 +17,7 @@ import type {
 const POINTS_PER_MM = 72 / 25.4;
 const TARGET_WIDTH = 100 * POINTS_PER_MM;
 const TARGET_HEIGHT = 150 * POINTS_PER_MM;
+const COLISSIMO_IMAGE_WIDTH = 1200;
 const require = createRequire(import.meta.url);
 const standardFontDataUrl = `${path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "standard_fonts")}${path.sep}`;
 
@@ -139,6 +141,166 @@ export function detectColissimoSplit(context: PdfAnalysisContext): number | unde
   return leftAnchorIsLeft && proofIsRight ? splitX : undefined;
 }
 
+function findVerticalBorder(
+  isDark: (x: number, y: number) => boolean,
+  imageWidth: number,
+  imageHeight: number,
+  startX: number,
+  endX: number,
+) {
+  const startY = Math.round(imageHeight * 0.08);
+  const endY = Math.round(imageHeight * 0.92);
+  let bestX = -1;
+  let bestCoverage = 0;
+
+  for (let x = Math.round(imageWidth * startX); x < Math.round(imageWidth * endX); x += 1) {
+    let coveredRows = 0;
+    for (let y = startY; y < endY; y += 1) {
+      if (
+        isDark(Math.max(0, x - 1), y) ||
+        isDark(x, y) ||
+        isDark(Math.min(imageWidth - 1, x + 1), y)
+      ) {
+        coveredRows += 1;
+      }
+    }
+    if (coveredRows > bestCoverage) {
+      bestX = x;
+      bestCoverage = coveredRows;
+    }
+  }
+
+  return {
+    x: bestX,
+    coverage: bestCoverage / (endY - startY),
+  };
+}
+
+function findHorizontalBorder(
+  isDark: (x: number, y: number) => boolean,
+  imageWidth: number,
+  imageHeight: number,
+  startX: number,
+  endX: number,
+  startY: number,
+  endY: number,
+) {
+  const firstX = Math.round(imageWidth * startX);
+  const lastX = Math.round(imageWidth * endX);
+  let bestCoverage = 0;
+
+  for (let y = Math.round(imageHeight * startY); y < Math.round(imageHeight * endY); y += 1) {
+    let coveredColumns = 0;
+    for (let x = firstX; x < lastX; x += 1) {
+      if (
+        isDark(x, Math.max(0, y - 1)) ||
+        isDark(x, y) ||
+        isDark(x, Math.min(imageHeight - 1, y + 1))
+      ) {
+        coveredColumns += 1;
+      }
+    }
+    bestCoverage = Math.max(bestCoverage, coveredColumns / (lastX - firstX));
+  }
+
+  return bestCoverage;
+}
+
+async function detectColissimoImageSplit(
+  bytes: Uint8Array,
+  context: PdfAnalysisContext,
+): Promise<number | undefined> {
+  // This narrow page-size gate targets the known Colissimo two-panel export only.
+  if (
+    context.rotation !== 0 ||
+    context.width <= context.height ||
+    Math.abs(context.width - 670.26) > 10 ||
+    Math.abs(context.height - 472.84) > 8
+  ) {
+    return undefined;
+  }
+
+  const loadingTask = getDocument({
+    data: bytes.slice(),
+    standardFontDataUrl,
+    useSystemFonts: true,
+    disableFontFace: false,
+  });
+  const document = await loadingTask.promise;
+  try {
+    if (document.numPages !== 1) return undefined;
+
+    const page = await document.getPage(1);
+    if (page.rotate !== 0) return undefined;
+    const scale = COLISSIMO_IMAGE_WIDTH / context.width;
+    const viewport = page.getViewport({ scale });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const canvasContext = canvas.getContext("2d");
+    canvasContext.fillStyle = "#ffffff";
+    canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({
+      canvasContext: canvasContext as never,
+      viewport,
+      background: "rgb(255,255,255)",
+    }).promise;
+
+    const { data, width, height } = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+    const isDark = (x: number, y: number) => {
+      const offset = (y * width + x) * 4;
+      return data[offset] < 160 && data[offset + 1] < 160 && data[offset + 2] < 160;
+    };
+
+    const leftOuterBorder = findVerticalBorder(isDark, width, height, 0.01, 0.04);
+    const leftPanelBorder = findVerticalBorder(isDark, width, height, 0.44, 0.49);
+    const rightPanelBorder = findVerticalBorder(isDark, width, height, 0.51, 0.55);
+    const rightOuterBorder = findVerticalBorder(isDark, width, height, 0.95, 0.99);
+    const hasPanelOutlines =
+      leftOuterBorder.coverage > 0.65 &&
+      leftPanelBorder.coverage > 0.65 &&
+      rightPanelBorder.coverage > 0.65 &&
+      rightOuterBorder.coverage > 0.65 &&
+      findHorizontalBorder(isDark, width, height, 0.04, 0.45, 0.04, 0.08) > 0.55 &&
+      findHorizontalBorder(isDark, width, height, 0.04, 0.45, 0.92, 0.96) > 0.55 &&
+      findHorizontalBorder(isDark, width, height, 0.55, 0.95, 0.04, 0.08) > 0.55 &&
+      findHorizontalBorder(isDark, width, height, 0.55, 0.95, 0.92, 0.96) > 0.55;
+    if (!hasPanelOutlines || leftPanelBorder.x < 0) return undefined;
+
+    const gutterWidth = Math.max(2, Math.round(width * 0.008));
+    let clearestGutter = 1;
+    for (let x = Math.round(width * 0.48); x <= Math.round(width * 0.51) - gutterWidth; x += 1) {
+      let darkPixels = 0;
+      for (let y = Math.round(height * 0.08); y < Math.round(height * 0.92); y += 1) {
+        for (let gutterX = x; gutterX < x + gutterWidth; gutterX += 1) {
+          if (isDark(gutterX, y)) darkPixels += 1;
+        }
+      }
+      clearestGutter = Math.min(clearestGutter, darkPixels / (gutterWidth * height * 0.84));
+    }
+    if (clearestGutter > 0.2) return undefined;
+
+    let barcodeRows = 0;
+    for (let y = Math.round(height * 0.57); y < Math.round(height * 0.76); y += 2) {
+      let transitions = 0;
+      let wasDark = isDark(Math.round(width * 0.08), y);
+      for (let x = Math.round(width * 0.08) + 1; x < Math.round(width * 0.42); x += 1) {
+        const dark = isDark(x, y);
+        if (dark !== wasDark) transitions += 1;
+        wasDark = dark;
+      }
+      if (transitions >= 32) barcodeRows += 1;
+    }
+    if (barcodeRows < 8) return undefined;
+
+    const splitPixel = Math.min(
+      Math.round(width * 0.495),
+      leftPanelBorder.x + Math.max(6, Math.round(width * 0.012)),
+    );
+    return (splitPixel / width) * context.width;
+  } finally {
+    await document.destroy();
+  }
+}
+
 async function createColissimoSplitPdf(source: PDFDocument, splitX: number, rotation: number) {
   const sourcePage = source.getPage(0);
   const { width, height } = sourcePage.getSize();
@@ -232,8 +394,12 @@ export async function preparePdfForPrint(filePath: string): Promise<PdfPreparati
   const input = new Uint8Array(await readFile(filePath));
   const context = await analyzePdf(input);
   const format = detectPdfFormat(context.width, context.height);
-  const carrier = detectCarrier(context);
-  const colissimoSplit = detectColissimoSplit(context);
+  let carrier = detectCarrier(context);
+  let colissimoSplit = detectColissimoSplit(context);
+  if (colissimoSplit === undefined) {
+    colissimoSplit = await detectColissimoImageSplit(input, context);
+    if (colissimoSplit !== undefined) carrier = "COLISSIMO";
+  }
 
   if (colissimoSplit !== undefined) {
     const source = await PDFDocument.load(input);
