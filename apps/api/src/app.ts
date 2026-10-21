@@ -30,7 +30,7 @@ const electronLocalCorsOptions: CorsOptions = {
       callback(new Error(`CORS origin refused: ${origin}`), false);
     }
   },
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-BV-Bootstrap-Token"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   optionsSuccessStatus: 204,
 };

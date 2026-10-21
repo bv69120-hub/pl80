@@ -2,6 +2,17 @@ interface BvDesktopBridge {
   isElectron?: boolean;
   isPackaged?: boolean;
   platform?: string;
+  getBootstrapToken?: () => Promise<string | null>;
+  getDesktopStatus?: () => Promise<{
+    apiAvailable: boolean;
+    printerInstalled: boolean;
+    printerReady: boolean;
+    printerError: string | null;
+    sumatraAvailable: boolean;
+    printerName: string;
+  }>;
+  getLaunchAtLogin?: () => Promise<boolean>;
+  setLaunchAtLogin?: (enabled: boolean) => Promise<boolean>;
 }
 
 declare global {

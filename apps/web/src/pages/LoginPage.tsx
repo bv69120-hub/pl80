@@ -11,17 +11,40 @@ import {
   Typography,
 } from "@mui/material";
 import { FormEvent, useState } from "react";
+import { useEffect } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { apiUrl } from "../api/apiUrl";
 
 export function LoginPage() {
   const { isAuthenticated, isLoading, login } = useAuth();
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    let active = true;
+    void fetch(apiUrl("/api/auth/setup-status"))
+      .then(async (response) => {
+        if (!response.ok) return;
+        const status = (await response.json()) as { setupRequired?: boolean };
+        const bootstrapToken = await window.bvDesktop?.getBootstrapToken?.();
+        if (active && status.setupRequired && bootstrapToken) {
+          navigate("/first-run", { replace: true });
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setCheckingSetup(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
 
   const redirectTo =
     typeof location.state === "object" &&
@@ -34,7 +57,7 @@ export function LoginPage() {
       ? location.state.from.pathname
       : "/dashboard";
 
-  if (isLoading) {
+  if (isLoading || checkingSetup) {
     return (
       <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
         <CircularProgress />

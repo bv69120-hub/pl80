@@ -15,7 +15,14 @@ const databasePackageDirectory = path.join(root, "packages", "database");
 const buildDirectory = path.join(root, "apps", "desktop", "build");
 const databaseDirectory = path.join(buildDirectory, "database");
 const databasePath = path.join(databaseDirectory, "bv-expedition.db");
-const desktopPrismaClientDirectory = path.join(root, "apps", "desktop", "node_modules", ".prisma", "client");
+const desktopPrismaClientDirectory = path.join(
+  root,
+  "apps",
+  "desktop",
+  "node_modules",
+  ".prisma",
+  "client",
+);
 const toolsDirectory = path.join(buildDirectory, "tools");
 const packagedSumatraPath = path.join(toolsDirectory, "SumatraPDF.exe");
 
@@ -122,7 +129,10 @@ if (!sumatraSourcePath)
   );
 
 async function sha256(filePath) {
-  return createHash("sha256").update(await readFile(filePath)).digest("hex").toUpperCase();
+  return createHash("sha256")
+    .update(await readFile(filePath))
+    .digest("hex")
+    .toUpperCase();
 }
 await copyFile(sumatraSourcePath, packagedSumatraPath);
 const sourceSumatraHash = await sha256(sumatraSourcePath);
@@ -144,12 +154,17 @@ run("pnpm", ["--filter", "@bv/database", "exec", "prisma", "generate"], env);
 const prismaClientPackageDirectory = path.dirname(
   require.resolve("@prisma/client/package.json", { paths: [databasePackageDirectory] }),
 );
-const generatedPrismaClientDirectory = path.resolve(prismaClientPackageDirectory, "..", "..", ".prisma", "client");
+const generatedPrismaClientDirectory = path.resolve(
+  prismaClientPackageDirectory,
+  "..",
+  "..",
+  ".prisma",
+  "client",
+);
 await rm(desktopPrismaClientDirectory, { recursive: true, force: true });
 await mkdir(path.dirname(desktopPrismaClientDirectory), { recursive: true });
 await cp(generatedPrismaClientDirectory, desktopPrismaClientDirectory, { recursive: true });
 run("pnpm", ["--filter", "@bv/database", "exec", "prisma", "migrate", "deploy"], env);
-run("pnpm", ["--filter", "@bv/database", "exec", "tsx", "prisma/seed.ts"], env);
 const png = createIconPng();
 await writeFile(path.join(buildDirectory, "icon.png"), png);
 await writeFile(path.join(buildDirectory, "icon.ico"), createIco(png));

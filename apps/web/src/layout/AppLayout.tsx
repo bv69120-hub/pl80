@@ -11,6 +11,7 @@ import {
   Avatar,
   Box,
   Button,
+  Chip,
   Divider,
   Drawer,
   IconButton,
@@ -24,9 +25,10 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { apiUrl } from "../api/apiUrl";
 
 const drawerWidth = 264;
 const navigationItems = [
@@ -75,43 +77,86 @@ function Brand() {
   );
 }
 
-function PrinterStatus({ compact = false }: { compact?: boolean }) {
+interface DesktopStatus {
+  apiAvailable: boolean;
+  printerInstalled: boolean;
+  printerReady: boolean;
+  printerError: string | null;
+  sumatraAvailable: boolean;
+  printerName: string;
+}
+
+function DesktopStatus({ compact = false }: { compact?: boolean }) {
+  const { token } = useAuth();
+  const [desktopStatus, setDesktopStatus] = useState<DesktopStatus | null>(null);
+  const [cloudConnected, setCloudConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!window.bvDesktop?.isElectron) return;
+    let active = true;
+    const refresh = async () => {
+      const [localStatus, health, cloud] = await Promise.all([
+        window.bvDesktop?.getDesktopStatus?.().catch(() => null),
+        fetch(new URL("/health", apiUrl("/")).toString())
+          .then((response) => response.ok)
+          .catch(() => false),
+        token
+          ? fetch(apiUrl("/api/cloud/status"), {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+              .then((response) =>
+                response.ok ? (response.json() as Promise<{ connected: boolean }>) : null,
+              )
+              .catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      if (!active) return;
+      setDesktopStatus(localStatus ? { ...localStatus, apiAvailable: health } : null);
+      setCloudConnected(cloud?.connected ?? false);
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [token]);
+
+  if (!window.bvDesktop?.isElectron) return null;
+  const stateChip = (
+    label: string,
+    state: boolean | null,
+    availableLabel: string,
+    unavailableLabel = "indisponible",
+  ) => (
+    <Chip
+      size="small"
+      label={`${label} · ${state === null ? "…" : state ? availableLabel : unavailableLabel}`}
+      color={state ? "success" : state === null ? "default" : "error"}
+      variant="outlined"
+      sx={{
+        color: "common.white",
+        borderColor: "rgba(255,255,255,.32)",
+        "& .MuiChip-label": { px: compact ? 0.75 : 1, fontSize: compact ? 10 : 12 },
+      }}
+    />
+  );
   return (
     <Stack
       direction="row"
-      spacing={1.25}
+      spacing={0.5}
       alignItems="center"
-      sx={{
-        px: compact ? 1.25 : 2,
-        py: 1,
-        borderRadius: 2,
-        bgcolor: "rgba(255,255,255,.12)",
-        border: "1px solid rgba(255,255,255,.2)",
-      }}
+      sx={{ display: { xs: "none", lg: "flex" } }}
     >
-      <Box
-        sx={{
-          width: 9,
-          height: 9,
-          borderRadius: "50%",
-          bgcolor: "success.main",
-          boxShadow: "0 0 0 4px rgba(255,255,255,.13)",
-        }}
-      />
-      <Box sx={{ display: { xs: compact ? "none" : "block", sm: "block" } }}>
-        <Typography
-          variant="caption"
-          sx={{ color: "rgba(255,255,255,.72)", display: "block", lineHeight: 1 }}
-        >
-          Imprimante
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{ color: "common.white", fontWeight: 800, lineHeight: 1.35 }}
-        >
-          PL80E · Prête
-        </Typography>
-      </Box>
+      {stateChip("API locale", desktopStatus?.apiAvailable ?? null, "connectée")}
+      {stateChip("Cloud Relay", cloudConnected, "connecté")}
+      {stateChip(
+        desktopStatus?.printerName ?? "PL80E",
+        desktopStatus ? desktopStatus.printerInstalled && desktopStatus.printerReady : null,
+        "prête",
+        desktopStatus?.printerInstalled ? "hors ligne" : "absente",
+      )}
+      {stateChip("SumatraPDF", desktopStatus?.sumatraAvailable ?? null, "disponible", "absent")}
     </Stack>
   );
 }
@@ -235,7 +280,7 @@ export function AppLayout() {
           >
             Nouveau bordereau
           </Button>
-          <PrinterStatus compact />
+          <DesktopStatus compact />
         </Toolbar>
       </AppBar>
       <Box component="nav" sx={{ width: { lg: drawerWidth }, flexShrink: { lg: 0 } }}>

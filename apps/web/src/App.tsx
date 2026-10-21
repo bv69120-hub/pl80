@@ -12,6 +12,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { ClientPrintPage } from "./pages/ClientPrintPage";
 import { LabelTestCenterPage } from "./pages/LabelTestCenterPage";
 import { CarrierIncidentsPage } from "./pages/CarrierIncidentsPage";
+import { FirstRunPage } from "./pages/FirstRunPage";
 
 export function App() {
   return (
@@ -23,6 +24,7 @@ export function App() {
           <Route path="/client-print/:token" element={<ClientPrintPage mode="local" />} />
           <Route path="/:storeId" element={<ClientPrintPage mode="cloud" />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/first-run" element={<FirstRunPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />

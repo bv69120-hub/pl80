@@ -38,6 +38,9 @@ export function SettingsPage() {
   const [mode, setMode] = useState<ClientMode | null>(null);
   const [cloud, setCloud] = useState<CloudStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [launchAtLogin, setLaunchAtLogin] = useState<boolean | null>(null);
+  const [launchAtLoginBusy, setLaunchAtLoginBusy] = useState(false);
+  const [launchAtLoginError, setLaunchAtLoginError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const configuredClientBaseUrl = import.meta.env.VITE_PUBLIC_CLIENT_BASE_URL?.trim();
@@ -84,6 +87,38 @@ export function SettingsPage() {
     const timer = window.setInterval(() => void loadCloud(), 5000);
     return () => window.clearInterval(timer);
   }, [request, loadCloud]);
+
+  useEffect(() => {
+    if (!window.bvDesktop?.getLaunchAtLogin) return;
+    let active = true;
+    void window.bvDesktop
+      .getLaunchAtLogin()
+      .then((enabled) => {
+        if (active) setLaunchAtLogin(enabled);
+      })
+      .catch(() => {
+        if (active) setLaunchAtLoginError("Impossible de lire le réglage de démarrage Windows.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function changeLaunchAtLogin(enabled: boolean) {
+    if (!window.bvDesktop?.setLaunchAtLogin) {
+      setLaunchAtLoginError("Ce réglage est disponible uniquement dans l’application Windows.");
+      return;
+    }
+    setLaunchAtLoginBusy(true);
+    setLaunchAtLoginError(null);
+    try {
+      setLaunchAtLogin(await window.bvDesktop.setLaunchAtLogin(enabled));
+    } catch {
+      setLaunchAtLoginError("Windows n’a pas pu modifier le démarrage automatique.");
+    } finally {
+      setLaunchAtLoginBusy(false);
+    }
+  }
 
   async function changeConnectionMode(nextMode: "LOCAL" | "CLOUD") {
     if (!authToken) return;
@@ -159,6 +194,29 @@ export function SettingsPage() {
           </Stack>
         </CardContent>
       </Card>
+      {window.bvDesktop?.isElectron && (
+        <Card>
+          <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+            <Stack spacing={1.5}>
+              <Typography variant="h5">Démarrage avec Windows</Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={launchAtLogin ?? false}
+                    disabled={launchAtLoginBusy || launchAtLogin === null}
+                    onChange={(_, enabled) => void changeLaunchAtLogin(enabled)}
+                  />
+                }
+                label="Lancer BV Expédition Pro à l’ouverture de session"
+              />
+              <Typography color="text.secondary" variant="body2">
+                Désactivé par défaut. Vous pouvez modifier ce choix à tout moment.
+              </Typography>
+              {launchAtLoginError && <Alert severity="error">{launchAtLoginError}</Alert>}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardContent sx={{ p: { xs: 3, md: 4 } }}>
           {!mode ? (
