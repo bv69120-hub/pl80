@@ -10,25 +10,15 @@ import { clientModeSettingsRouter } from "./settings/client.mode.routes.js";
 import { cloudRouter } from "./cloud/cloud.routes.js";
 import { labelTestCenterRouter } from "./label-test-center/label-test.routes.js";
 import { incidentsRouter } from "./incidents/incidents.routes.js";
+import { isAllowedApiOrigin } from "./runtime-security.js";
 
-const electronLocalCorsOptions: CorsOptions = {
+const apiCorsOptions: CorsOptions = {
   origin(origin, callback) {
-    if (origin === undefined || origin === "null" || origin.startsWith("file://")) {
+    if (origin === undefined || isAllowedApiOrigin(origin)) {
       callback(null, true);
       return;
     }
-
-    try {
-      const url = new URL(origin);
-      const isAllowedHttpOrigin =
-        url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost");
-      callback(
-        isAllowedHttpOrigin ? null : new Error(`CORS origin refused: ${origin}`),
-        isAllowedHttpOrigin,
-      );
-    } catch {
-      callback(new Error(`CORS origin refused: ${origin}`), false);
-    }
+    callback(new Error("CORS origin refused."), false);
   },
   allowedHeaders: ["Content-Type", "Authorization", "X-BV-Bootstrap-Token"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -39,7 +29,7 @@ export function createApp(): Express {
   const app = express();
 
   app.use(helmet());
-  app.use(process.env.BV_ELECTRON_LOCAL === "1" ? cors(electronLocalCorsOptions) : cors());
+  app.use(cors(apiCorsOptions));
   app.use(express.json());
 
   app.use("/api/auth", authRouter);

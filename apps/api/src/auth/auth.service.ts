@@ -2,12 +2,7 @@ import bcrypt from "bcrypt";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { prisma } from "@bv/database";
 import type { AuthenticatedUser, AuthTokenPayload } from "./auth.types.js";
-
-const defaultJwtSecret = "bv-expedition-pro-development-secret";
-
-function getJwtSecret() {
-  return process.env.JWT_SECRET ?? defaultJwtSecret;
-}
+import { getJwtSecret } from "../runtime-security.js";
 
 function getJwtExpiresIn(): SignOptions["expiresIn"] {
   return (process.env.JWT_EXPIRES_IN ?? "8h") as SignOptions["expiresIn"];

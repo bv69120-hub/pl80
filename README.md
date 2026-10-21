@@ -143,9 +143,22 @@ est :
 
 ```env
 DATABASE_URL="file:./dev.db"
-JWT_SECRET="change-me-in-development"
 JWT_EXPIRES_IN="8h"
+API_HOST=127.0.0.1
+API_ALLOW_LAN=false
 ```
+
+L'API refuse de demarrer sans `JWT_SECRET` valide. Generez une cle de 256 bits
+pour le fichier `.env` prive sans reutiliser une valeur d'exemple :
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+Pour autoriser un acces depuis le reseau local, configurez explicitement
+`API_ALLOW_LAN=true`, `API_HOST=0.0.0.0` et `API_ALLOWED_ORIGINS` avec les
+origines Web exactes (schema, adresse et port). Le bind par defaut reste
+`127.0.0.1`.
 
 Le schema Prisma contient les modeles techniques suivants :
 

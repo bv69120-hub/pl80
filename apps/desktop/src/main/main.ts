@@ -9,7 +9,9 @@ import { promisify } from "node:util";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { Express } from "express";
 import { loadEnvFile } from "@bv/api/env";
+import { assertRuntimeSecurityConfig, getApiHost } from "@bv/api/security";
 import { resolveSumatra } from "@bv/printer";
+import { loadOrCreateJwtSecret } from "./jwt-secret.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +42,9 @@ const runtimeEnvironmentKeys = [
   "CLOUD_RELAY_ALLOW_INSECURE",
   "STORE_ID",
   "STORE_SECRET",
+  "API_HOST",
+  "API_ALLOW_LAN",
+  "API_ALLOWED_ORIGINS",
 ];
 
 function listen(serverApp: Express, port: number, host: string) {
@@ -57,6 +62,9 @@ async function prepareRuntime() {
   if (!app.isPackaged) {
     loadEnvFile(path.resolve(__dirname, "../../../../.env"), runtimeEnvironmentKeys);
   }
+  process.env.JWT_SECRET = await loadOrCreateJwtSecret(
+    path.join(userData, "security", "jwt-secret"),
+  );
 
   const dataDirectory = path.join(userData, "data");
   const databasePath = path.join(dataDirectory, "bv-expedition.db");
@@ -90,6 +98,7 @@ async function prepareRuntime() {
 
 async function startEmbeddedServices() {
   await prepareRuntime();
+  assertRuntimeSecurityConfig();
   bootstrapToken = randomBytes(32).toString("hex");
   process.env.BV_BOOTSTRAP_TOKEN = bootstrapToken;
   const [{ createApp, createFrontendApp }, { printWorker }, { prisma }, cloud] = await Promise.all([
@@ -128,8 +137,8 @@ async function startEmbeddedServices() {
     'CREATE INDEX IF NOT EXISTS "CarrierIncident_createdAt_idx" ON "CarrierIncident"("createdAt")',
   );
 
-  apiServer = await listen(createApp(), API_PORT, "0.0.0.0");
-  frontendServer = await listen(createFrontendApp(webRoot), FRONTEND_PORT, "0.0.0.0");
+  apiServer = await listen(createApp(), API_PORT, getApiHost());
+  frontendServer = await listen(createFrontendApp(webRoot), FRONTEND_PORT, getApiHost());
   printWorkerTask = printWorker.start();
   cloud.startCloudConnection();
   registerDesktopIpc();

@@ -8,6 +8,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build && tsc -p tsconfig.electron.json",
     "package:win": "electron-builder --win nsis --x64",
+    "test": "pnpm build && node --test test/*.test.mjs",
     "typecheck": "tsc -b --pretty && tsc -p tsconfig.electron.json --pretty --noEmit",
     "lint": "eslint ."
   },
@@ -44,11 +45,14 @@
       "dist/**/*",
       "package.json",
       "node_modules/.prisma/**/*",
+      "!**/prisma/dev.db*",
+      "!**/dev.db*",
       "!**/.turbo/**",
       "!**/*.tsbuildinfo",
       "!**/release/**",
       "!**/node_modules/.cache/**"
     ],
+    "afterPack": "scripts/after-pack.cjs",
     "extraResources": [
       {
         "from": "../web/dist",

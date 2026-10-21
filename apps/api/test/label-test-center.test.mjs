@@ -6,7 +6,9 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { readdir, rm, stat } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { once } from "node:events";
+import process from "node:process";
 import { after, before, test } from "node:test";
 import jwt from "jsonwebtoken";
 import { prisma } from "@bv/database";
@@ -14,7 +16,8 @@ import { printerService } from "@bv/printer";
 import { createApp } from "../dist/app.js";
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
-const TOKEN_SECRET = "bv-expedition-pro-development-secret";
+const TOKEN_SECRET = randomBytes(32).toString("base64url");
+process.env.JWT_SECRET = TOKEN_SECRET;
 const pdfRequire = createRequire(
   fileURLToPath(new globalThis.URL("../../../packages/printer/dist/index.js", import.meta.url)),
 );

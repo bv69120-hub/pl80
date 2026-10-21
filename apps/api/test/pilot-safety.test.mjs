@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { once } from "node:events";
+import process from "node:process";
 import { after, before, test } from "node:test";
 import jwt from "jsonwebtoken";
 import { prisma } from "@bv/database";
@@ -10,7 +12,8 @@ import {
 } from "../dist/print-jobs/print.jobs.routes.js";
 import { createApp } from "../dist/app.js";
 
-const TOKEN_SECRET = "bv-expedition-pro-development-secret";
+const TOKEN_SECRET = randomBytes(32).toString("base64url");
+process.env.JWT_SECRET = TOKEN_SECRET;
 const server = createApp().listen(0, "127.0.0.1");
 const originalUserFindUnique = prisma.user.findUnique;
 const originalIncidentCreate = prisma.carrierIncident.create;
