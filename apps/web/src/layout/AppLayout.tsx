@@ -5,6 +5,7 @@ import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import MenuIcon from "@mui/icons-material/Menu";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
+import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import {
   AppBar,
   Avatar,
@@ -32,6 +33,7 @@ const navigationItems = [
   { label: "Tableau de bord", path: "/dashboard", icon: <DashboardOutlinedIcon /> },
   { label: "Nouveau bordereau", path: "/new-label", icon: <LocalPrintshopOutlinedIcon /> },
   { label: "Historique", path: "/history", icon: <HistoryOutlinedIcon /> },
+  { label: "Incidents transporteurs", path: "/incidents", icon: <ReportProblemOutlinedIcon /> },
   { label: "Paramètres", path: "/settings", icon: <SettingsOutlinedIcon /> },
   {
     label: "Centre de test",

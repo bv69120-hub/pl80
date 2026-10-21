@@ -1,7 +1,9 @@
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import {
   Alert,
   Box,
+  Button,
   Card,
   Chip,
   CircularProgress,
@@ -34,6 +36,7 @@ function statusLabel(status: string) {
   const labels: Record<string, string> = {
     PENDING: "En attente",
     PRINTING: "Envoi en cours",
+    REVIEW_REQUIRED: "Vérification requise · non imprimé",
     SUBMITTED: "Commande terminée, spooler non observé",
     SPOOLER_OBSERVED: "Travail observé dans le spooler",
     FAILED: "Échec",
@@ -47,6 +50,33 @@ export function HistoryPage() {
   const [jobs, setJobs] = useState<HistoryJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [downloadError, setDownloadError] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  async function downloadForReview(jobId: string) {
+    if (!token || downloadingId) return;
+    setDownloadingId(jobId);
+    setDownloadError(false);
+    try {
+      const response = await fetch(
+        apiUrl(`/api/print-jobs/${encodeURIComponent(jobId)}/original`),
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!response.ok) throw new Error("PDF indisponible");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `bordereau-a-verifier-${jobId}.pdf`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setDownloadError(true);
+    } finally {
+      setDownloadingId(null);
+    }
+  }
   useEffect(() => {
     if (!token) return;
     fetch(apiUrl("/api/print-jobs"), { headers: { Authorization: `Bearer ${token}` } })
@@ -67,6 +97,16 @@ export function HistoryPage() {
         <Typography color="text.secondary">Toutes les impressions client et employé.</Typography>
       </Box>
       {error && <Alert severity="error">Impossible de charger l’historique.</Alert>}
+      {downloadError && (
+        <Alert severity="error">
+          Impossible de récupérer le PDF source pour sa vérification locale.
+        </Alert>
+      )}
+      <Alert severity="warning">
+        Les bordereaux marqués « Vérification requise » n’ont pas été imprimés automatiquement.
+        Téléchargez le PDF source et faites-le examiner dans le Centre de test avant toute
+        impression.
+      </Alert>
       <Card>
         {loading ? (
           <Box sx={{ minHeight: 260, display: "grid", placeItems: "center" }}>
@@ -137,6 +177,18 @@ export function HistoryPage() {
                           >
                             {job.errorMessage}
                           </Typography>
+                        )}
+                        {job.status === "REVIEW_REQUIRED" && (
+                          <Button
+                            size="small"
+                            startIcon={<DownloadOutlinedIcon />}
+                            onClick={() => void downloadForReview(job.id)}
+                            disabled={downloadingId !== null}
+                          >
+                            {downloadingId === job.id
+                              ? "Téléchargement…"
+                              : "Télécharger pour revue"}
+                          </Button>
                         )}
                       </Stack>
                     </TableCell>

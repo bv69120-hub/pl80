@@ -18,6 +18,7 @@ export interface PdfPreparationResult {
   preparedPath: string;
   carrier: Carrier;
   format: PdfFormat;
+  strategy: string;
   adaptation: AdaptationKind;
   adapted: boolean;
   compatiblePL80E: boolean;

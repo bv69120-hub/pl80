@@ -19,6 +19,7 @@ import {
   detectVintedMondialRelayTopLabel,
   preparePdfForPrint,
 } from "../dist/preparation/pdf.preparation.js";
+import { requiresManualReview } from "../dist/preparation/preparation.safety.js";
 import { carrierStrategies } from "../dist/preparation/carrier.strategies.js";
 
 const require = createRequire(import.meta.url);
@@ -398,6 +399,66 @@ test("100 x 150 mm PDFs remain compatible without adaptation", async () => {
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
+});
+
+test("automatic print safety requires review for unsupported and non-Chronopost generic A4 crops", () => {
+  const base = {
+    originalPath: "original.pdf",
+    preparedPath: "prepared.pdf",
+    carrier: "UNKNOWN",
+    format: "A4",
+    strategy: "GENERIC_A4_CROP",
+    adaptation: "LABEL_EXTRACTED",
+    adapted: true,
+    compatiblePL80E: true,
+  };
+  assert.equal(requiresManualReview(base), true);
+  assert.equal(
+    requiresManualReview({
+      ...base,
+      strategy: "UNSUPPORTED_UNCHANGED",
+      adaptation: "UNSUPPORTED",
+      compatiblePL80E: false,
+    }),
+    true,
+  );
+  assert.equal(
+    requiresManualReview({
+      ...base,
+      carrier: "CHRONOPOST",
+    }),
+    false,
+    "the established Chronopost generic A4 path remains eligible",
+  );
+  assert.equal(
+    requiresManualReview({
+      ...base,
+      carrier: "COLISSIMO",
+    }),
+    true,
+    "an unrecognized Colissimo A4 crop is held for visual review",
+  );
+  assert.equal(
+    requiresManualReview({
+      ...base,
+      carrier: "UNKNOWN",
+      format: "100x150",
+      strategy: "NATIVE_100X150",
+      adaptation: "NONE",
+      adapted: false,
+    }),
+    false,
+  );
+  assert.equal(
+    requiresManualReview({
+      ...base,
+      carrier: "UNKNOWN",
+      format: "A4",
+      strategy: "VINTED_MONDIAL_RELAY_TOP_LABEL",
+    }),
+    false,
+    "a dedicated, recognized extraction remains eligible",
+  );
 });
 
 test("anonymized Chronopost Shop2Shop labels are cropped and rotated for thermal printing", async () => {

@@ -55,6 +55,7 @@ export function NewLabelPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadNeedsReview, setUploadNeedsReview] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { token } = useAuth();
 
@@ -76,6 +77,7 @@ export function NewLabelPage() {
     setIsUploading(true);
     setUploadError(null);
     setUploadSuccess(null);
+    setUploadNeedsReview(false);
 
     try {
       const formData = new FormData();
@@ -91,11 +93,15 @@ export function NewLabelPage() {
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error("Échec de l'envoi du bordereau.");
-      }
-
-      setUploadSuccess("Votre bordereau a été ajouté à la file d’impression.");
+      const result = (await response.json()) as { reviewRequired?: boolean; message?: string };
+      if (!response.ok) throw new Error(result.message ?? "Échec de l'envoi du bordereau.");
+      setUploadNeedsReview(result.reviewRequired === true);
+      setUploadSuccess(
+        result.reviewRequired
+          ? (result.message ??
+              "Le bordereau n’a pas été imprimé. Une vérification visuelle par l’équipe est requise.")
+          : "Votre bordereau a été ajouté à la file d’impression.",
+      );
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Échec de l'envoi du bordereau.");
     } finally {
@@ -119,6 +125,7 @@ export function NewLabelPage() {
     setSelectedFile(file);
     setUploadError(null);
     setUploadSuccess(null);
+    setUploadNeedsReview(false);
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -136,6 +143,7 @@ export function NewLabelPage() {
     setPageCount(null);
     setUploadError(null);
     setUploadSuccess(null);
+    setUploadNeedsReview(false);
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -246,7 +254,11 @@ export function NewLabelPage() {
                 )}
 
                 {uploadError && <Alert severity="error">{uploadError}</Alert>}
-                {uploadSuccess && <Alert severity="success">{uploadSuccess}</Alert>}
+                {uploadSuccess && (
+                  <Alert severity={uploadNeedsReview ? "warning" : "success"}>
+                    {uploadSuccess}
+                  </Alert>
+                )}
                 {isUploading && <Alert severity="info">Téléversement du PDF en cours...</Alert>}
               </Stack>
             </CardContent>

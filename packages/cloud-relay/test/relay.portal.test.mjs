@@ -96,6 +96,9 @@ test("the public Cloud Relay does not expose the admin label-test API", async ()
 
     const preview = await globalThis.fetch(`${baseUrl}/api/label-tests/private-run/original`);
     assert.equal(preview.status, 404);
+
+    const incidentReports = await globalThis.fetch(`${baseUrl}/api/incidents`);
+    assert.equal(incidentReports.status, 404);
   });
 });
 

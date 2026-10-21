@@ -4,11 +4,7 @@ import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import { prisma } from "@bv/database";
-import {
-  enqueuePrintJob,
-  preparationData,
-  prepareUploadedPdf,
-} from "../print-jobs/print.jobs.routes.js";
+import { createPreparedPrintJob, prepareUploadedPdf } from "../print-jobs/print.jobs.routes.js";
 
 type ConnectionState = "CONNECTED" | "CONNECTING" | "DISCONNECTED";
 const MODE_KEY = "CONNECTION_MODE";
@@ -40,22 +36,15 @@ async function receiveJob(message: { id: string; filename: string; pdf: string }
   try {
     const file = { path: temporaryPath, originalname: message.filename } as Express.Multer.File;
     const { preparation, originalFilePath } = await prepareUploadedPdf(file);
-    const job = await prisma.printJob.create({
-      data: {
-        filename: message.filename,
-        status: "PENDING",
-        source: "CLIENT",
-        printerName: "PL80E",
-        copies: 1,
-        ...preparationData(preparation, originalFilePath),
-      },
-    });
-    enqueuePrintJob({
-      id: job.id,
-      filename: job.filename,
-      filePath: preparation.preparedPath,
+    const result = await createPreparedPrintJob({
+      filename: message.filename,
+      preparation,
+      originalFilePath,
       source: "CLIENT",
     });
+    if (result.reviewRequired) {
+      console.info("[cloud] Incoming label held for employee review; automatic printing skipped.");
+    }
     socket?.send(JSON.stringify({ type: "ack", id: message.id }));
   } finally {
     await unlink(temporaryPath).catch(() => undefined);
@@ -99,7 +88,12 @@ async function connect() {
         pdf?: string;
       };
       if (message.type === "job" && message.id && message.filename && message.pdf)
-        void receiveJob(message as Required<typeof message>).catch(console.error);
+        void receiveJob(message as Required<typeof message>).catch((error: unknown) => {
+          console.error(
+            "[cloud] Failed to process incoming print job.",
+            error instanceof Error ? error.name : "UnknownError",
+          );
+        });
     } catch (error) {
       console.error("[cloud] Message invalide", error);
     }

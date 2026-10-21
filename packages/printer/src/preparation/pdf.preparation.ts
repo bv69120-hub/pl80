@@ -711,13 +711,22 @@ export async function preparePdfForPrint(
   const format = detectPdfFormat(context.width, context.height);
   const fullPage: PdfRegion = { left: 0, bottom: 0, right: context.width, top: context.height };
   const finish = (
-    result: PdfPreparationResult,
+    result: Omit<PdfPreparationResult, "strategy">,
     strategy: string,
     region: PdfRegion,
-  ): Promise<PdfPreparationResult> =>
-    options.diagnosticsDirectory
-      ? addDiagnostics(result, input, context, strategy, region, options.diagnosticsDirectory)
-      : Promise.resolve(result);
+  ): Promise<PdfPreparationResult> => {
+    const preparedResult = { ...result, strategy };
+    return options.diagnosticsDirectory
+      ? addDiagnostics(
+          preparedResult,
+          input,
+          context,
+          strategy,
+          region,
+          options.diagnosticsDirectory,
+        )
+      : Promise.resolve(preparedResult);
+  };
   let carrier = detectCarrier(context);
   let colissimoSplit = detectColissimoSplit(context);
   if (colissimoSplit === undefined) {

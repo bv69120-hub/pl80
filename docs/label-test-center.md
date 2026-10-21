@@ -51,3 +51,23 @@ Relais Colis. Les resultats de cette categorie doivent rester a verifier et ne
 pas etre declares conformes sur la seule base d'une preparation generique.
 L'absence d'une reference ou d'une revue visuelle interdit egalement de
 declarer une variante conforme.
+
+## Impression en pilote et rapports d'incident
+
+Les PDF dont le format est incompatible ou dont la preparation utilise une
+coupe A4 generique autre que le chemin Chronopost classique sont mis en statut
+`REVIEW_REQUIRED` et ne sont jamais ajoutes a la file d'impression. Le chemin
+Chronopost A4 deja utilise et les strategies d'extraction specifiques restent
+inchanges. Dans l'Historique, l'equipe peut telecharger le PDF source, le faire
+examiner par un administrateur dans le Centre de test, puis lancer une
+impression uniquement avec la confirmation explicite deja requise par ce
+Centre. Le statut « soumis » ou la presence dans le spooler ne prouve pas une
+sortie physique.
+
+La page employe **Incidents transporteurs** permet de noter le transporteur,
+le type de bordereau, le resultat du recadrage, une categorie d'anomalie, le
+resultat d'impression et la verification physique. La date/heure est generee
+par le serveur. Les champs sont des choix fermes : aucun nom, adresse, numero
+de suivi, nom de fichier, PDF ou commentaire libre n'est accepte ou conserve
+dans ces rapports. Ces rapports sont des constats operationnels, pas une
+validation de conformite transporteur.

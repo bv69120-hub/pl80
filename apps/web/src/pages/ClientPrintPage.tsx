@@ -193,6 +193,7 @@ export function ClientPrintPage({ mode }: { mode: "local" | "cloud" }) {
   const [hasPreviewFailed, setHasPreviewFailed] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [hasQueuedJob, setHasQueuedJob] = useState(false);
+  const [reviewRequired, setReviewRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canSafelyRetry, setCanSafelyRetry] = useState(false);
   const [availability, setAvailability] = useState<
@@ -236,6 +237,7 @@ export function ClientPrintPage({ mode }: { mode: "local" | "cloud" }) {
     setError(null);
     setCanSafelyRetry(false);
     setHasQueuedJob(false);
+    setReviewRequired(false);
     setPageCount(0);
     setIsPreviewReady(false);
     setHasPreviewFailed(false);
@@ -290,7 +292,7 @@ export function ClientPrintPage({ mode }: { mode: "local" | "cloud" }) {
       });
       const contentType = response.headers.get("content-type") ?? "";
       const result = contentType.includes("application/json")
-        ? ((await response.json()) as { message?: string })
+        ? ((await response.json()) as { message?: string; reviewRequired?: boolean })
         : {
             message: (await response.text())
               .replace(/<[^>]*>/g, " ")
@@ -302,6 +304,7 @@ export function ClientPrintPage({ mode }: { mode: "local" | "cloud" }) {
         setCanSafelyRetry(response.status === 429);
         return;
       }
+      setReviewRequired(result.reviewRequired === true);
       setHasQueuedJob(true);
     } catch (requestError) {
       console.error("Client print request outcome is unknown.", requestError);
@@ -336,8 +339,10 @@ export function ClientPrintPage({ mode }: { mode: "local" | "cloud" }) {
             </Box>
             <Chip
               icon={<LocalPrintshopOutlinedIcon />}
-              label="En attente d’impression"
-              color="primary"
+              label={
+                reviewRequired ? "Vérification requise · non imprimé" : "En attente d’impression"
+              }
+              color={reviewRequired ? "warning" : "primary"}
               sx={{ mt: 2, mb: 1.5, fontWeight: 800 }}
             />
             <Typography
@@ -345,11 +350,14 @@ export function ClientPrintPage({ mode }: { mode: "local" | "cloud" }) {
               variant="h4"
               sx={{ color: "#003B7A", fontSize: { xs: 25, sm: 32 } }}
             >
-              Votre demande a bien été transmise !
+              {reviewRequired
+                ? "Une vérification est nécessaire"
+                : "Votre demande a bien été transmise !"}
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1.5, fontSize: { xs: 15, sm: 17 } }}>
-              Le serveur a accepté votre bordereau. L’équipe vérifie son traitement par
-              l’imprimante.
+              {reviewRequired
+                ? "Votre bordereau n’a pas été imprimé automatiquement. Demandez à l’équipe de vérifier le document avant toute impression."
+                : "Le serveur a accepté votre bordereau. L’équipe vérifie son traitement par l’imprimante."}
             </Typography>
             <Alert severity="info" sx={{ mt: 3, textAlign: "left", borderRadius: 3 }}>
               La demande transmise ne confirme pas à elle seule que le bordereau est sorti de

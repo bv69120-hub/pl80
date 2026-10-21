@@ -11,6 +11,7 @@ import { NewLabelPage } from "./pages/NewLabelPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ClientPrintPage } from "./pages/ClientPrintPage";
 import { LabelTestCenterPage } from "./pages/LabelTestCenterPage";
+import { CarrierIncidentsPage } from "./pages/CarrierIncidentsPage";
 
 export function App() {
   return (
@@ -29,6 +30,7 @@ export function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/new-label" element={<NewLabelPage />} />
               <Route path="/history" element={<HistoryPage />} />
+              <Route path="/incidents" element={<CarrierIncidentsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>

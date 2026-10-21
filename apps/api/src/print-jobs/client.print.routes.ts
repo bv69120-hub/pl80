@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { prisma } from "@bv/database";
 import {
-  enqueuePrintJob,
-  preparationData,
+  createPreparedPrintJob,
+  MANUAL_REVIEW_MESSAGE,
   prepareUploadedPdf,
   upload,
 } from "./print.jobs.routes.js";
@@ -65,28 +65,20 @@ clientPrintRouter.post("/:token", upload.single("file"), async (request, respons
       return;
     }
     const { preparation, originalFilePath } = await prepareUploadedPdf(request.file);
-    const job = await prisma.printJob.create({
-      data: {
-        filename: request.file.originalname,
-        status: "PENDING",
-        source: "CLIENT",
-        printerName: "PL80E",
-        copies: 1,
-        ...preparationData(preparation, originalFilePath),
-      },
-    });
-    lastClientPrintAt = Date.now();
-    enqueuePrintJob({
-      id: job.id,
-      filename: job.filename,
-      filePath: preparation.preparedPath,
+    const result = await createPreparedPrintJob({
+      filename: request.file.originalname,
+      preparation,
+      originalFilePath,
       source: "CLIENT",
     });
-    response.status(201).json({
-      id: job.id,
-      status: job.status,
-      source: job.source,
-      preparation,
+    lastClientPrintAt = Date.now();
+    response.status(result.reviewRequired ? 202 : 201).json({
+      id: result.job.id,
+      status: result.job.status,
+      source: result.job.source,
+      reviewRequired: result.reviewRequired,
+      ...(result.reviewRequired ? { message: MANUAL_REVIEW_MESSAGE } : {}),
+      ...(!result.reviewRequired ? { preparation } : {}),
     });
   } catch (error) {
     next(error);

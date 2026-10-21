@@ -39,6 +39,19 @@ model PrintJob {
   @@index([source, status])
 }
 
+model CarrierIncident {
+  id               String   @id @default(cuid())
+  carrier          String
+  labelType        String
+  cropResult       String
+  issueType        String
+  printResult      String
+  physicalVerified Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model Setting {
   id        String   @id @default(cuid())
   key       String   @unique

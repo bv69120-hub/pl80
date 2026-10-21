@@ -1,11 +1,11 @@
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, readFile, unlink } from "node:fs/promises";
 import { Router } from "express";
 import multer from "multer";
 import { prisma } from "@bv/database";
-import { preparePdfForPrint, printQueue } from "@bv/printer";
+import { preparePdfForPrint, printQueue, requiresManualReview } from "@bv/printer";
 import type { PdfPreparationResult, PrintJob, PrintJobStatus } from "@bv/printer";
 import type { AuthenticatedRequest } from "../auth/auth.middleware.js";
 import { authenticate } from "../auth/auth.middleware.js";
@@ -22,6 +22,8 @@ const upload = multer({
 });
 
 export const printJobsRouter: Router = Router();
+export const MANUAL_REVIEW_MESSAGE =
+  "Le format du bordereau nécessite une vérification visuelle. Aucune impression automatique n’a été lancée.";
 
 const printHistoryDirectory =
   process.env.PRINT_HISTORY_DIR ?? path.resolve(process.cwd(), "data", "print-history");
@@ -73,6 +75,58 @@ function enqueuePrintJob(job: {
   printQueue.enqueue(queueJob);
 }
 
+export async function createPreparedPrintJob(options: {
+  filename: string;
+  preparation: PdfPreparationResult;
+  originalFilePath: string;
+  source: "CLIENT" | "EMPLOYEE";
+  userId?: string;
+  copies?: number;
+}) {
+  const reviewRequired = requiresManualReview(options.preparation);
+  const job = await prisma.printJob.create({
+    data: {
+      filename: options.filename,
+      status: reviewRequired ? "REVIEW_REQUIRED" : "PENDING",
+      source: options.source,
+      printerName: "PL80E",
+      copies: options.copies ?? 1,
+      userId: options.userId,
+      errorMessage: reviewRequired ? MANUAL_REVIEW_MESSAGE : null,
+      ...preparationData(options.preparation, options.originalFilePath),
+      ...(reviewRequired ? { preparedFilePath: null } : {}),
+    },
+  });
+
+  if (!reviewRequired) {
+    enqueuePrintJob({
+      id: job.id,
+      filename: job.filename,
+      filePath: options.preparation.preparedPath,
+      originalFilePath: options.originalFilePath,
+      source: options.source,
+      copies: options.copies,
+    });
+  } else {
+    const temporaryPaths = new Set([
+      options.preparation.originalPath,
+      options.preparation.preparedPath,
+    ]);
+    for (const temporaryPath of temporaryPaths) {
+      if (temporaryPath === options.originalFilePath) continue;
+      try {
+        await unlink(temporaryPath);
+      } catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+          console.error("[print-jobs] Unable to remove a temporary review PDF.");
+        }
+      }
+    }
+  }
+
+  return { job, reviewRequired };
+}
+
 printJobsRouter.post("/", authenticate, upload.single("file"), async (request, response, next) => {
   try {
     const auth = (request as AuthenticatedRequest).auth;
@@ -82,26 +136,27 @@ printJobsRouter.post("/", authenticate, upload.single("file"), async (request, r
     }
     const copies = Math.max(1, Math.min(99, Number(request.body.copies) || 1));
     const { preparation, originalFilePath } = await prepareUploadedPdf(request.file);
-    const job = await prisma.printJob.create({
-      data: {
-        filename: request.file.originalname,
-        status: "PENDING",
-        source: "EMPLOYEE",
-        printerName: "PL80E",
-        copies,
-        userId: auth.id,
-        ...preparationData(preparation, originalFilePath),
-      },
-    });
-    enqueuePrintJob({
-      id: job.id,
-      filename: job.filename,
-      filePath: preparation.preparedPath,
+    const result = await createPreparedPrintJob({
+      filename: request.file.originalname,
+      preparation,
       originalFilePath,
       source: "EMPLOYEE",
+      userId: auth.id,
       copies,
     });
-    response.status(201).json({ job, preparation });
+    response.status(result.reviewRequired ? 202 : 201).json(
+      result.reviewRequired
+        ? {
+            job: {
+              id: result.job.id,
+              status: result.job.status,
+              source: result.job.source,
+            },
+            reviewRequired: true,
+            message: MANUAL_REVIEW_MESSAGE,
+          }
+        : { ...result, preparation },
+    );
   } catch (error) {
     next(error);
   }
@@ -131,6 +186,24 @@ printJobsRouter.get("/:id/preparation", authenticate, async (request, response, 
       adapted: job.adapted,
       compatiblePL80E: job.pl80eCompatible,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+printJobsRouter.get("/:id/original", authenticate, async (request, response, next) => {
+  try {
+    const jobId = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id;
+    const job = await prisma.printJob.findUnique({
+      where: { id: jobId },
+      select: { originalFilePath: true },
+    });
+    if (!job?.originalFilePath) {
+      response.status(404).json({ message: "Le PDF source n’est plus disponible." });
+      return;
+    }
+    const pdf = await readFile(job.originalFilePath);
+    response.type("application/pdf").send(pdf);
   } catch (error) {
     next(error);
   }
