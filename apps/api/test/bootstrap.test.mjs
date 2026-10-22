@@ -44,7 +44,9 @@ after(async () => {
 
 test("initial setup only permits one token-authorized administrator creation", async () => {
   const statusResponse = await fetch(`${baseUrl}/api/auth/setup-status`);
-  assert.deepEqual(await statusResponse.json(), { setupRequired: true });
+  const initialStatus = await statusResponse.json();
+  assert.deepEqual(initialStatus, { setupRequired: true });
+  assert.equal("bootstrapToken" in initialStatus, false);
 
   const deniedResponse = await fetch(`${baseUrl}/api/auth/bootstrap`, {
     method: "POST",
@@ -79,7 +81,7 @@ test("initial setup only permits one token-authorized administrator creation", a
   });
   assert.equal(reuseResponse.status, 403);
   assert.equal(users.length, 1);
-  assert.deepEqual(await (await fetch(`${baseUrl}/api/auth/setup-status`)).json(), {
-    setupRequired: false,
-  });
+  const completedStatus = await (await fetch(`${baseUrl}/api/auth/setup-status`)).json();
+  assert.deepEqual(completedStatus, { setupRequired: false });
+  assert.equal("bootstrapToken" in completedStatus, false);
 });

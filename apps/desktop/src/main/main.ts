@@ -207,7 +207,7 @@ async function createWindow() {
       ? path.join(process.resourcesPath, "icon.ico")
       : path.resolve(__dirname, "../../build/icon.ico"),
     webPreferences: {
-      preload: path.join(__dirname, "../preload/preload.js"),
+      preload: path.join(__dirname, "../preload/preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       additionalArguments: [`--bv-packaged=${String(app.isPackaged)}`],

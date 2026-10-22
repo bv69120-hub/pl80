@@ -17,6 +17,8 @@ import { apiUrl } from "../api/apiUrl";
 export function FirstRunPage() {
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [checkAttempt, setCheckAttempt] = useState(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -26,15 +28,37 @@ export function FirstRunPage() {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setAvailabilityError(null);
     async function checkSetup() {
       try {
         const response = await fetch(apiUrl("/api/auth/setup-status"));
+        if (!response.ok) throw new Error(`API HTTP ${response.status}`);
         const status = (await response.json()) as { setupRequired?: boolean };
-        const bootstrapToken = await window.bvDesktop?.getBootstrapToken?.();
-        if (active)
-          setAvailable(response.ok && status.setupRequired === true && Boolean(bootstrapToken));
+        if (typeof status.setupRequired !== "boolean") throw new Error("Invalid setup status");
+        if (!status.setupRequired) {
+          if (active) setAvailable(false);
+          return;
+        }
+
+        const desktopBridge = window.bvDesktop;
+        const packagedElectron =
+          new URLSearchParams(window.location.search).get("bv-desktop") === "packaged";
+        if (!desktopBridge?.isElectron) {
+          if (packagedElectron) throw new Error("Electron bridge unavailable");
+          if (active) setAvailable(false);
+          return;
+        }
+        const bootstrapToken = await desktopBridge.getBootstrapToken?.();
+        if (!bootstrapToken) throw new Error("Secure first-run authorization unavailable");
+        if (active) setAvailable(true);
       } catch {
-        if (active) setAvailable(false);
+        if (active) {
+          setAvailable(false);
+          setAvailabilityError(
+            "La première configuration n’est pas disponible. Vérifiez l’API locale et réessayez.",
+          );
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -43,7 +67,7 @@ export function FirstRunPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [checkAttempt]);
 
   if (loading) {
     return (
@@ -52,7 +76,7 @@ export function FirstRunPage() {
       </Box>
     );
   }
-  if (!available) return <Navigate to="/login" replace />;
+  if (!available && !availabilityError) return <Navigate to="/login" replace />;
 
   async function createAdministrator(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -98,6 +122,22 @@ export function FirstRunPage() {
                 Créez le compte administrateur. Aucun mot de passe par défaut n’est installé.
               </Typography>
             </Stack>
+            {availabilityError && (
+              <Alert
+                severity="error"
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => setCheckAttempt((attempt) => attempt + 1)}
+                  >
+                    Réessayer
+                  </Button>
+                }
+              >
+                {availabilityError}
+              </Alert>
+            )}
             {error && <Alert severity="error">{error}</Alert>}
             <Stack
               component="form"
@@ -130,7 +170,11 @@ export function FirstRunPage() {
                 autoComplete="new-password"
                 required
               />
-              <Button type="submit" variant="contained" disabled={saving}>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={saving || !available || Boolean(availabilityError)}
+              >
                 {saving ? "Création…" : "Créer le compte administrateur"}
               </Button>
             </Stack>

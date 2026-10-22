@@ -21,30 +21,58 @@ export function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [setupCheckError, setSetupCheckError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [setupCheckAttempt, setSetupCheckAttempt] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     let active = true;
-    void fetch(apiUrl("/api/auth/setup-status"))
-      .then(async (response) => {
-        if (!response.ok) return;
-        const status = (await response.json()) as { setupRequired?: boolean };
-        const bootstrapToken = await window.bvDesktop?.getBootstrapToken?.();
-        if (active && status.setupRequired && bootstrapToken) {
+    setCheckingSetup(true);
+    setSetupCheckError(null);
+    async function checkSetup() {
+      try {
+        const response = await fetch(apiUrl("/api/auth/setup-status"));
+        if (!response.ok) {
+          throw new Error(`API HTTP ${response.status}`);
+        }
+        const status = (await response.json()) as { setupRequired?: unknown };
+        if (typeof status.setupRequired !== "boolean") {
+          throw new Error("Invalid setup status response");
+        }
+        if (!status.setupRequired) return;
+
+        const desktopBridge = window.bvDesktop;
+        const packagedElectron =
+          new URLSearchParams(window.location.search).get("bv-desktop") === "packaged";
+        if (!desktopBridge?.isElectron) {
+          if (packagedElectron) throw new Error("Electron bridge unavailable");
+          return;
+        }
+        const bootstrapToken = await desktopBridge.getBootstrapToken?.();
+        if (!bootstrapToken) {
+          throw new Error("Secure first-run authorization unavailable");
+        }
+        if (active) {
           navigate("/first-run", { replace: true });
         }
-      })
-      .catch(() => undefined)
-      .finally(() => {
+      } catch {
+        if (active) {
+          setSetupCheckError(
+            "Impossible de vérifier la première configuration. Vérifiez que l’API locale est démarrée, puis réessayez.",
+          );
+        }
+      } finally {
         if (active) setCheckingSetup(false);
-      });
+      }
+    }
+    void checkSetup();
     return () => {
       active = false;
     };
-  }, [navigate]);
+  }, [navigate, setupCheckAttempt]);
 
   const redirectTo =
     typeof location.state === "object" &&
@@ -123,6 +151,22 @@ export function LoginPage() {
                 {error}
               </Alert>
             )}
+            {setupCheckError && (
+              <Alert
+                severity="error"
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => setSetupCheckAttempt((attempt) => attempt + 1)}
+                  >
+                    Réessayer
+                  </Button>
+                }
+              >
+                {setupCheckError}
+              </Alert>
+            )}
 
             <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
               <TextField
@@ -146,7 +190,7 @@ export function LoginPage() {
                 type="submit"
                 variant="contained"
                 size="large"
-                disabled={isSubmitting}
+                disabled={isSubmitting || Boolean(setupCheckError)}
                 startIcon={isSubmitting ? <CircularProgress color="inherit" size={18} /> : null}
               >
                 Se connecter
